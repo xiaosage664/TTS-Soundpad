@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# 项目运行产物
+audio_cache/
+config/
+tts_debug.log
+nul
+
+# 打包的源码压缩包
+*.zip
+
+# IDE / 编辑器
+.qoder/
+.vscode/
+.idea/
