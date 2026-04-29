@@ -6,7 +6,6 @@ __pycache__/
 # PyInstaller
 build/
 dist/
-*.spec
 
 # 项目运行产物
 audio_cache/
