@@ -255,6 +255,9 @@ class SoundpadController:
         else:
             _log.warning("  等待超时! count=%d", self.get_sound_count())
 
+        # 短暂等待确保 Soundpad 完成文件加载后再播放
+        time.sleep(0.15)
+
         _log.info("  play_sound index=%d", new_index)
         self.play_sound(new_index, speakers=speakers, mic=mic)
         return new_index

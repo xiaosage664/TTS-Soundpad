@@ -1,5 +1,4 @@
 import asyncio
-import hashlib
 import logging
 import time
 from pathlib import Path
@@ -21,30 +20,13 @@ _CHINESE_VOICES_FALLBACK = [
 ]
 
 
-def _cache_key(text: str, voice: str, rate: str, pitch: str) -> str:
-    """生成缓存键：text+voice+rate+pitch 的 md5。"""
-    raw = f"{text}|{voice}|{rate}|{pitch}"
-    return hashlib.md5(raw.encode("utf-8")).hexdigest()
-
-
 class TTSEngine:
     def __init__(self, cache_dir: Path, default_voice: str = "zh-CN-XiaoxiaoNeural"):
         self._cache_dir = cache_dir
         self._cache_dir.mkdir(parents=True, exist_ok=True)
         self._default_voice = default_voice
         self._voices_cache: list[dict] | None = None
-        # 内存缓存: cache_key -> file_path
-        self._file_cache: dict[str, str] = {}
-        self._build_file_cache()
-
-    def _build_file_cache(self):
-        """启动时扫描已有缓存文件，建立索引。"""
-        for f in self._cache_dir.glob("tts_*.mp3"):
-            # 文件名格式: tts_{cache_key}.mp3
-            stem = f.stem  # tts_{cache_key}
-            if stem.startswith("tts_") and len(stem) == 36:  # tts_ + 32 hex
-                key = stem[4:]
-                self._file_cache[key] = str(f.resolve())
+        self._file_counter = 0
 
     async def synthesize(
         self,
@@ -53,21 +35,14 @@ class TTSEngine:
         rate: str = "+0%",
         pitch: str = "+0Hz",
     ) -> str:
-        """将文字转换为语音 mp3 文件，返回绝对路径。支持缓存命中。"""
+        """将文字转换为语音 mp3 文件，返回绝对路径。"""
         voice = voice or self._default_voice
         text = text.strip()
         if not text:
             raise TTSGenerationError("文本不能为空")
 
-        # 缓存命中检查
-        key = _cache_key(text, voice, rate, pitch)
-        cached = self._file_cache.get(key)
-        if cached and Path(cached).exists() and Path(cached).stat().st_size > 0:
-            _log.info("缓存命中: %s", cached)
-            return cached
-
-        # 缓存未命中，生成新文件
-        filename = f"tts_{key}.mp3"
+        self._file_counter += 1
+        filename = f"tts_{int(time.time())}_{self._file_counter}.mp3"
         output_path = self._cache_dir / filename
 
         try:
@@ -83,7 +58,6 @@ class TTSEngine:
             raise TTSGenerationError("语音文件生成失败 (文件为空)")
 
         resolved = str(output_path.resolve())
-        self._file_cache[key] = resolved
         _log.info("新生成: %s", resolved)
         return resolved
 
@@ -118,11 +92,6 @@ class TTSEngine:
         for f in self._cache_dir.glob("tts_*.mp3"):
             try:
                 if f.stat().st_mtime < cutoff:
-                    # 同步清理内存缓存
-                    stem = f.stem
-                    if stem.startswith("tts_"):
-                        key = stem[4:]
-                        self._file_cache.pop(key, None)
                     f.unlink()
             except OSError:
                 pass

@@ -28,7 +28,6 @@ from app.async_bridge import AsyncBridge
 from app.config_manager import ConfigManager
 from app.orchestrator import Orchestrator
 from app.soundpad import SoundpadController
-from app.tray_manager import TrayManager
 from app.tts_engine import TTSEngine
 from gui.main_window import MainWindow
 
@@ -76,37 +75,12 @@ def main():
     # 创建主窗口
     window = MainWindow(root, orch)
 
-    # --- 系统托盘 ---
-    def show_window():
-        root.after(0, _restore_window)
-
-    def _restore_window():
-        root.deiconify()
-        root.lift()
-        root.focus_force()
-
-    def quit_app():
-        root.after(0, _do_quit)
-
-    def _do_quit():
+    # 关闭窗口时退出程序
+    def on_closing():
         window.save_state()
-        tray.stop()
         orch.player.cleanup()
         bridge.shutdown()
         root.destroy()
-
-    def minimize_to_tray():
-        root.withdraw()
-
-    tray = TrayManager(on_show=show_window, on_quit=quit_app)
-    tray.start()
-
-    # 设置托盘最小化回调（用户点击"托盘"按钮时触发）
-    window.set_tray_callback(minimize_to_tray)
-
-    # 关闭窗口时真正退出程序
-    def on_closing():
-        _do_quit()
 
     root.protocol("WM_DELETE_WINDOW", on_closing)
 

@@ -6,14 +6,14 @@ import threading
 
 def _mci_send(command: str) -> str:
     """发送 MCI 命令字符串并返回结果。"""
-    buf = ctypes.create_string_buffer(256)
+    buf = ctypes.create_unicode_buffer(256)
     err = ctypes.windll.winmm.mciSendStringW(command, buf, 255, 0)
     if err:
         # 获取错误描述
         err_buf = ctypes.create_unicode_buffer(256)
         ctypes.windll.winmm.mciGetErrorStringW(err, err_buf, 255)
         raise RuntimeError(f"MCI 错误: {err_buf.value}")
-    return buf.value.decode("utf-8", errors="replace")
+    return buf.value
 
 
 class AudioPlayer:

@@ -10,7 +10,7 @@ class AsyncBridge:
     """
 
     def __init__(self, tk_root):
-        self._root = tk_root
+        self.root = tk_root
         self._loop = asyncio.new_event_loop()
         self._thread = threading.Thread(target=self._run_loop, daemon=True)
         self._thread.start()
@@ -32,10 +32,10 @@ class AsyncBridge:
             try:
                 result = fut.result()
                 if on_success:
-                    self._root.after(0, on_success, result)
+                    self.root.after(0, on_success, result)
             except Exception as exc:
                 if on_error:
-                    self._root.after(0, on_error, exc)
+                    self.root.after(0, on_error, exc)
 
         future.add_done_callback(_on_done)
 

@@ -1,4 +1,5 @@
 import logging
+import threading
 import time
 from enum import Enum, auto
 from typing import Callable
@@ -51,6 +52,7 @@ class Orchestrator:
         self.player = AudioPlayer()
         self.history: list[HistoryItem] = []
         self._busy = False
+        self._speak_gen = 0
         self._tts_indices: list[int] = []
 
     @property
@@ -62,10 +64,6 @@ class Orchestrator:
     # ------------------------------------------------------------------
 
     def speak(self, text: str, voice: str | None, callback: StatusCallback):
-        if self._busy:
-            callback(SpeakStatus.ERROR, "正在处理中，请稍候")
-            return
-
         text = text.strip()
         max_len = self.config.get("max_text_length", 500)
         if not text:
@@ -75,46 +73,71 @@ class Orchestrator:
             callback(SpeakStatus.ERROR, f"文本超过 {max_len} 字限制")
             return
 
+        # 新请求覆盖旧请求：递增计数器使旧回调失效
+        self._speak_gen += 1
+        gen = self._speak_gen
+
         voice = voice or self.config.get("voice")
         rate = self.config.get("rate", "+0%")
         pitch = self.config.get("pitch", "+0Hz")
         self._busy = True
         callback(SpeakStatus.GENERATING, "正在生成语音...")
-        _log.info("speak() text=%r voice=%s rate=%s pitch=%s", text, voice, rate, pitch)
+        _log.info("speak() gen=%d text=%r voice=%s rate=%s pitch=%s", gen, text, voice, rate, pitch)
 
         coro = self.tts.synthesize(text, voice, rate=rate, pitch=pitch)
         self.bridge.submit(
             coro,
-            on_success=lambda fp: self._on_speak_generated(fp, text, voice, callback),
-            on_error=lambda exc: self._on_speak_error(exc, callback),
+            on_success=lambda fp: self._on_speak_generated(fp, text, voice, callback, gen),
+            on_error=lambda exc: self._on_speak_error(exc, callback, gen),
         )
 
     def _on_speak_generated(
-        self, file_path: str, text: str, voice: str, callback: StatusCallback
+        self, file_path: str, text: str, voice: str, callback: StatusCallback, gen: int
     ):
-        """TTS 生成成功后，发送到 Soundpad。"""
+        """TTS 生成成功后，在后台线程发送到 Soundpad，避免阻塞 GUI。"""
+        if gen != self._speak_gen:
+            _log.info("speak gen=%d 已过期 (当前=%d)，忽略", gen, self._speak_gen)
+            return
         _log.info("TTS 生成成功: %s", file_path)
         callback(SpeakStatus.SENDING, "正在发送到 Soundpad...")
-        try:
-            self._cleanup_old_indices()
-            new_index = self._send_to_soundpad(file_path)
-            self._tts_indices.append(new_index)
-            self.history.insert(0, HistoryItem(text, voice, file_path))
-            self.config.add_recent_text(text)
-            callback(SpeakStatus.PLAYING, "播放中")
-        except SoundpadNotRunningError as e:
-            _log.error("SoundpadNotRunningError: %s", e)
-            callback(SpeakStatus.ERROR, "Soundpad 未运行，请先启动 Soundpad")
-        except TTSSoundpadError as e:
-            _log.error("TTSSoundpadError: %s", e)
-            callback(SpeakStatus.ERROR, str(e))
-        except Exception as e:
-            _log.error("未知异常: %s", e, exc_info=True)
-            callback(SpeakStatus.ERROR, f"发送失败: {e}")
-        finally:
-            self._busy = False
 
-    def _on_speak_error(self, exc: Exception, callback: StatusCallback):
+        def _do_soundpad_io():
+            try:
+                self._cleanup_old_indices()
+                new_index = self._send_to_soundpad(file_path)
+                self._tts_indices.append(new_index)
+                self.history.insert(0, HistoryItem(text, voice, file_path))
+                self.config.add_recent_text(text)
+                self.bridge.root.after(0, lambda: self._finish_speak(callback, True, gen=gen))
+            except SoundpadNotRunningError as e:
+                _log.error("SoundpadNotRunningError: %s", e)
+                msg = "Soundpad 未运行，请先启动 Soundpad"
+                self.bridge.root.after(0, lambda: self._finish_speak(callback, False, msg, gen=gen))
+            except TTSSoundpadError as e:
+                _log.error("TTSSoundpadError: %s", e)
+                msg = str(e)
+                self.bridge.root.after(0, lambda: self._finish_speak(callback, False, msg, gen=gen))
+            except Exception as e:
+                _log.error("未知异常: %s", e, exc_info=True)
+                msg = f"发送失败: {e}"
+                self.bridge.root.after(0, lambda: self._finish_speak(callback, False, msg, gen=gen))
+
+        threading.Thread(target=_do_soundpad_io, daemon=True).start()
+
+    def _finish_speak(self, callback: StatusCallback, success: bool, error_msg: str = "", *, gen: int = 0):
+        """在主线程上完成 speak 流程的最终回调。"""
+        if gen != self._speak_gen:
+            _log.info("finish_speak gen=%d 已过期 (当前=%d)，忽略", gen, self._speak_gen)
+            return
+        self._busy = False
+        if success:
+            callback(SpeakStatus.PLAYING, "播放中")
+        else:
+            callback(SpeakStatus.ERROR, error_msg)
+
+    def _on_speak_error(self, exc: Exception, callback: StatusCallback, gen: int):
+        if gen != self._speak_gen:
+            return
         _log.error("TTS 生成失败: %s", exc, exc_info=True)
         self._busy = False
         callback(SpeakStatus.ERROR, str(exc))
@@ -193,7 +216,7 @@ class Orchestrator:
         self.bridge.submit(
             coro,
             on_success=lambda fp: self._on_preview_generated(fp, callback),
-            on_error=lambda exc: self._on_speak_error(exc, callback),
+            on_error=lambda exc: self._on_preview_error(exc, callback),
         )
 
     def _on_preview_generated(self, file_path: str, callback: StatusCallback):
@@ -204,6 +227,11 @@ class Orchestrator:
             callback(SpeakStatus.ERROR, f"预听失败: {e}")
         finally:
             self._busy = False
+
+    def _on_preview_error(self, exc: Exception, callback: StatusCallback):
+        _log.error("预听 TTS 生成失败: %s", exc, exc_info=True)
+        self._busy = False
+        callback(SpeakStatus.ERROR, str(exc))
 
     def stop_preview(self):
         self.player.stop()

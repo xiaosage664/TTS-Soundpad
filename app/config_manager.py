@@ -49,9 +49,9 @@ class ConfigManager:
 
     def _do_save(self):
         with self._lock:
-            self._path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self._path, "w", encoding="utf-8") as f:
-                json.dump(self._data, f, ensure_ascii=False, indent=2)
+            snapshot = json.dumps(self._data, ensure_ascii=False, indent=2)
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._path.write_text(snapshot, encoding="utf-8")
 
     def _schedule_save(self):
         """防抖保存：连续快速修改时只在最后一次修改后写入。"""
