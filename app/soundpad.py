@@ -255,12 +255,21 @@ class SoundpadController:
         else:
             _log.warning("  等待超时! count=%d", self.get_sound_count())
 
-        # 短暂等待确保 Soundpad 完成文件加载后再播放
-        time.sleep(0.15)
-
+        # 重试播放：Soundpad 添加文件后需要时间解码加载，
+        # MiniMax 生成的 32000Hz MP3 尤甚，固定延时不可靠
         _log.info("  play_sound index=%d", new_index)
-        self.play_sound(new_index, speakers=speakers, mic=mic)
-        return new_index
+        last_error = None
+        for retry in range(5):
+            try:
+                self.play_sound(new_index, speakers=speakers, mic=mic)
+                _log.info("  play_sound 成功 retry=%d", retry)
+                return new_index
+            except SoundpadCommandError as e:
+                last_error = e
+                _log.warning("  play_sound retry=%d 失败: %s", retry, e)
+                if retry < 4:
+                    time.sleep(0.2 * (retry + 1))
+        raise last_error  # type: ignore[misc]
 
 
 if __name__ == "__main__":
