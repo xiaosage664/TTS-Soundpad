@@ -7,6 +7,7 @@ from pathlib import Path
 import aiohttp
 
 from app import TTSGenerationError, TTSNetworkError
+from app.audio_cache import cache_path_for, make_cache_key, try_cache
 
 _log = logging.getLogger("minimax_engine")
 
@@ -44,7 +45,6 @@ class MiniMaxEngine:
         self._api_key = api_key
         self._model = model
         self._default_voice = default_voice
-        self._file_counter = 0
 
     @property
     def api_key(self) -> str:
@@ -92,6 +92,12 @@ class MiniMaxEngine:
         speed = kwargs.get("speed", 1.0)
         vol = kwargs.get("vol", 1.0)
         pitch = kwargs.get("pitch", 0)
+
+        key = make_cache_key("minimax", text, voice, speed=speed, vol=vol, pitch=pitch)
+        cached = try_cache(self._cache_dir, key, "minimax")
+        if cached:
+            _log.info("MiniMax 缓存命中: %s", cached)
+            return cached
 
         url = "https://api.minimaxi.com/v1/t2a_v2"
         headers = {
@@ -151,9 +157,7 @@ class MiniMaxEngine:
             raise TTSGenerationError(f"MiniMax 音频解码失败: {e}") from e
 
         # 写入文件
-        self._file_counter += 1
-        filename = f"minimax_{int(time.time())}_{self._file_counter}.mp3"
-        output_path = self._cache_dir / filename
+        output_path = cache_path_for(self._cache_dir, key, "minimax")
         try:
             output_path.write_bytes(audio_bytes)
         except OSError as e:

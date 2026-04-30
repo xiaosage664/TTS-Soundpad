@@ -6,6 +6,7 @@ from pathlib import Path
 import edge_tts
 
 from app import TTSGenerationError, TTSNetworkError
+from app.audio_cache import cache_path_for, make_cache_key, try_cache
 
 _log = logging.getLogger("tts_engine")
 
@@ -34,7 +35,6 @@ class TTSEngine:
         self._cache_dir.mkdir(parents=True, exist_ok=True)
         self._default_voice = default_voice
         self._voices_cache: list[dict] | None = None
-        self._file_counter = 0
 
     async def synthesize(
         self,
@@ -43,15 +43,19 @@ class TTSEngine:
         rate: str = "+0%",
         pitch: str = "+0Hz",
     ) -> str:
-        """将文字转换为语音 mp3 文件，返回绝对路径。"""
+        """将文字转换为语音 mp3 文件，返回绝对路径。内容缓存自动命中。"""
         voice = voice or self._default_voice
         text = text.strip()
         if not text:
             raise TTSGenerationError("文本不能为空")
 
-        self._file_counter += 1
-        filename = f"tts_{int(time.time())}_{self._file_counter}.mp3"
-        output_path = self._cache_dir / filename
+        key = make_cache_key("edge", text, voice, rate=rate, pitch=pitch)
+        cached = try_cache(self._cache_dir, key, "edge")
+        if cached:
+            _log.info("缓存命中: %s", cached)
+            return cached
+
+        output_path = cache_path_for(self._cache_dir, key, "edge")
 
         try:
             communicate = edge_tts.Communicate(text, voice, rate=rate, pitch=pitch)
@@ -99,7 +103,7 @@ class TTSEngine:
     def cleanup_old_files(self, max_age_hours: int = 24):
         """清理过期的临时音频文件。"""
         cutoff = time.time() - max_age_hours * 3600
-        for f in self._cache_dir.glob("tts_*.mp3"):
+        for f in self._cache_dir.glob("edge_*.mp3"):
             try:
                 if f.stat().st_mtime < cutoff:
                     f.unlink()

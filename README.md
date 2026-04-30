@@ -35,11 +35,43 @@ pip install -r requirements.txt
 python main.py
 ```
 
+## TTS 引擎
+
+### Edge TTS（默认，免费）
+
+启动即用，无需任何配置。基于微软 Edge 浏览器内置的在线 TTS 服务。
+
+**可用语音：** 晓晓、晓伊、云健、云希、云夏、云扬、晓北（东北话）、晓妮（陕西话）共 8 种。
+
+### MiniMax（商用，需 API Key）
+
+MiniMax 提供更丰富、更自然的音色，适合追求高品质语音的用户。
+
+#### 获取 API Key
+
+1. 访问 [MiniMax 开放平台](https://platform.minimaxi.com/) 注册账号
+2. 进入 **账户管理 → API Keys** 创建密钥
+3. 复制 API Key
+
+#### 配置方法
+
+1. 打开 TTS Soundpad，点击顶部的 **引擎切换** 选择「MiniMax」
+2. 在 **API Key** 输入框中粘贴密钥
+3. 点击 **验证** 按钮确认 Key 有效
+4. 在 **语音** 下拉框选择喜欢的音色
+5. 调节**语速**（0.5~2.0）、**音量**（0~10）、**音调**（-12~+12）
+
+> 💡 **提示：** API Key 会自动保存在 `config/settings.json` 中，下次启动无需重新输入。建议在游戏外先验证和试听，找到最佳参数组合。
+
+#### 费用说明
+
+MiniMax 按字符计费，具体价格请参考 [MiniMax 官方定价](https://platform.minimaxi.com/document/Price)。新用户通常有免费额度。
+
 ## 系统要求
 
 - Windows 10 / 11
 - [Soundpad](https://leppsoft.com/soundpad/)（需已安装并运行）
-- 网络连接（用于 Edge TTS 语音合成）
+- 网络连接（用于 Edge TTS / MiniMax 语音合成）
 
 ## 项目结构
 
@@ -51,7 +83,8 @@ TTS-Soundpad/
 │   ├── async_bridge.py  # 异步桥接 (后台线程运行 asyncio)
 │   ├── audio_player.py  # 本地音频预听播放
 │   ├── config_manager.py# 配置管理
-│   ├── orchestrator.py  # 业务协调器
+│   ├── minimax_engine.py# MiniMax TTS 引擎
+│   ├── orchestrator.py  # 业务协调器（双引擎调度）
 │   ├── soundpad.py      # Soundpad Named Pipe 通信
 │   └── tts_engine.py    # Edge TTS 语音合成
 ├── gui/
