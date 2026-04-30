@@ -236,14 +236,6 @@ class MainWindow:
             font=FONTS["body"], command=self._save_output_config,
         ).pack(side="left")
 
-        self._cleanup_var = ctk.BooleanVar(
-            value=self._orch.config.get("auto_cleanup_soundpad", True)
-        )
-        ctk.CTkCheckBox(
-            output_row, text="自动清理", variable=self._cleanup_var,
-            font=FONTS["small"], command=self._save_output_config,
-        ).pack(side="right", padx=(8, 0))
-
     # ------------------------------------------------------------------
     # 引擎切换
     # ------------------------------------------------------------------
@@ -537,7 +529,6 @@ class MainWindow:
     def _save_output_config(self):
         self._orch.config.set("play_on_mic", self._mic_var.get())
         self._orch.config.set("play_on_speakers", self._speaker_var.get())
-        self._orch.config.set("auto_cleanup_soundpad", self._cleanup_var.get())
 
     # ------------------------------------------------------------------
     # 快捷短语

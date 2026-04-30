@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import time
 from pathlib import Path
 
 import edge_tts
@@ -99,16 +98,6 @@ class TTSEngine:
         # 网络不可用时返回预设列表
         self._voices_cache = _CHINESE_VOICES_FALLBACK
         return self._voices_cache
-
-    def cleanup_old_files(self, max_age_hours: int = 24):
-        """清理过期的临时音频文件。"""
-        cutoff = time.time() - max_age_hours * 3600
-        for f in self._cache_dir.glob("edge_*.mp3"):
-            try:
-                if f.stat().st_mtime < cutoff:
-                    f.unlink()
-            except OSError:
-                pass
 
 
 if __name__ == "__main__":

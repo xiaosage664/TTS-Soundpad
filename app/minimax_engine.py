@@ -1,7 +1,6 @@
 import asyncio
 import binascii
 import logging
-import time
 from pathlib import Path
 
 import aiohttp
@@ -274,20 +273,6 @@ class MiniMaxEngine:
             return False, f"网络请求失败: {e}"
         except Exception as e:
             return False, f"验证异常: {e}"
-
-    # ------------------------------------------------------------------
-    # 辅助
-    # ------------------------------------------------------------------
-
-    def cleanup_old_files(self, max_age_hours: int = 24):
-        """清理过期的 MiniMax 临时音频文件。"""
-        cutoff = time.time() - max_age_hours * 3600
-        for f in self._cache_dir.glob("minimax_*.mp3"):
-            try:
-                if f.stat().st_mtime < cutoff:
-                    f.unlink()
-            except OSError:
-                pass
 
 
 if __name__ == "__main__":

@@ -19,7 +19,6 @@ _DEFAULTS = {
     # 通用
     "play_on_speakers": False,
     "play_on_mic": True,
-    "auto_cleanup": True,
     "max_text_length": 500,
     "window_geometry": "500x780",
     "window_topmost": False,
@@ -27,7 +26,6 @@ _DEFAULTS = {
     "recent_texts": [],
     "max_recent_texts": 20,
     "quick_phrases": [],
-    "auto_cleanup_soundpad": True,
     "floating_geometry": "",
 }
 

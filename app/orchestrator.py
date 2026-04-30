@@ -56,7 +56,6 @@ class Orchestrator:
         self.history: list[HistoryItem] = []
         self._busy = False
         self._speak_gen = 0
-        self._tts_indices: list[int] = []
 
     # ------------------------------------------------------------------
     # 引擎路由
@@ -130,9 +129,7 @@ class Orchestrator:
 
         def _do_soundpad_io():
             try:
-                self._cleanup_old_indices()
                 new_index = self._send_to_soundpad(file_path)
-                self._tts_indices.append(new_index)
                 self.history.insert(0, HistoryItem(text, voice, file_path))
                 self.config.add_recent_text(text)
                 self.bridge.root.after(0, lambda: self._finish_speak(callback, True, gen=gen))
@@ -169,23 +166,7 @@ class Orchestrator:
         self._busy = False
         callback(SpeakStatus.ERROR, str(exc))
 
-    def _cleanup_old_indices(self):
-        """清理 Soundpad 中之前的 TTS 条目。"""
-        if not self.config.get("auto_cleanup_soundpad", True):
-            return
-        if not self._tts_indices:
-            return
-        _log.info("清理旧索引: %s", self._tts_indices)
-        for idx in sorted(self._tts_indices, reverse=True):
-            try:
-                self.soundpad.select_index(idx)
-                self.soundpad.remove_selected()
-            except Exception as e:
-                _log.warning("清理索引 %d 失败: %s", idx, e)
-        self._tts_indices.clear()
-
     def _send_to_soundpad(self, file_path: str) -> int:
-        """发送文件到 Soundpad 并播放，返回新索引。"""
         speakers = self.config.get("play_on_speakers", False)
         mic = self.config.get("play_on_mic", True)
         _log.info("play_tts_file speakers=%s mic=%s", speakers, mic)

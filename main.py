@@ -82,10 +82,6 @@ def main():
     # 初始化协调器（双引擎）
     orch = Orchestrator(edge_tts, minimax, soundpad, bridge, config)
 
-    # 启动时清理旧缓存
-    edge_tts.cleanup_old_files()
-    minimax.cleanup_old_files()
-
     # 创建主窗口
     window = MainWindow(root, orch)
 
