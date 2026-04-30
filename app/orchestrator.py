@@ -228,7 +228,11 @@ class Orchestrator:
     def verify_minimax_key(self, callback: Callable[[bool, str], None]):
         """异步验证 MiniMax API Key。"""
         coro = self._minimax.verify_api_key()
-        self.bridge.submit(coro, on_success=callback)
+        self.bridge.submit(
+            coro,
+            on_success=lambda result: callback(result[0], result[1]),
+            on_error=lambda exc: callback(False, f"验证异常: {exc}"),
+        )
 
     # ------------------------------------------------------------------
     # 本地预听

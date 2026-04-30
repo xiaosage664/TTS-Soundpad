@@ -10,16 +10,19 @@ from app import TTSGenerationError, TTSNetworkError
 
 _log = logging.getLogger("minimax_engine")
 
-# MiniMax 系统预设音色（官方语音 ID）
+# MiniMax 系统预设音色（API 获取失败时的兜底，基于 Speech 2.8 文档）
 _PRESET_VOICES = [
+    {"name": "Chinese (Mandarin)_Reliable_Executive", "friendly_name": "沉稳高管 (男声)", "gender": "Male"},
+    {"name": "Chinese (Mandarin)_News_Anchor", "friendly_name": "新闻女声 (女声)", "gender": "Female"},
+    {"name": "Chinese (Mandarin)_Lyrical_Voice", "friendly_name": "抒情女声", "gender": "Female"},
+    {"name": "Chinese (Mandarin)_HK_Flight_Attendant", "friendly_name": "港普空乘 (女声)", "gender": "Female"},
     {"name": "male-qn-qingse", "friendly_name": "青涩 (青年男声)", "gender": "Male"},
-    {"name": "male-qn-jingying", "friendly_name": "精英 (精英男声)", "gender": "Male"},
-    {"name": "male-qn-badao", "friendly_name": "霸道 (霸道男声)", "gender": "Male"},
-    {"name": "male-qn-daxuesheng", "friendly_name": "大学生 (阳光男声)", "gender": "Male"},
     {"name": "female-shaonv", "friendly_name": "少女 (甜美少女)", "gender": "Female"},
-    {"name": "female-yujie", "friendly_name": "御姐 (成熟御姐)", "gender": "Female"},
-    {"name": "female-chengshu", "friendly_name": "成熟 (知性女声)", "gender": "Female"},
-    {"name": "female-tianmei", "friendly_name": "甜美 (甜美女声)", "gender": "Female"},
+    {"name": "English_Graceful_Lady", "friendly_name": "优雅女士 (英文)", "gender": "Female"},
+    {"name": "English_Insightful_Speaker", "friendly_name": "洞见演说 (英文)", "gender": "Male"},
+    {"name": "English_radiant_girl", "friendly_name": "元气少女 (英文)", "gender": "Female"},
+    {"name": "English_Persuasive_Man", "friendly_name": "说服男士 (英文)", "gender": "Male"},
+    {"name": "Japanese_Whisper_Belle", "friendly_name": "耳语少女 (日文)", "gender": "Female"},
 ]
 
 
@@ -34,7 +37,7 @@ class MiniMaxEngine:
         cache_dir: Path,
         api_key: str = "",
         model: str = "speech-2.8-hd",
-        default_voice: str = "female-shaonv",
+        default_voice: str = "Chinese (Mandarin)_Reliable_Executive",
     ):
         self._cache_dir = cache_dir
         self._cache_dir.mkdir(parents=True, exist_ok=True)
@@ -168,8 +171,49 @@ class MiniMaxEngine:
     # ------------------------------------------------------------------
 
     async def list_voices(self) -> list[dict]:
-        """返回 MiniMax 系统预设音色列表。"""
+        """返回 MiniMax 可用音色列表（从 API 动态获取，带本地缓存）。"""
+        voices = await self._fetch_system_voices()
+        if voices:
+            return voices
         return list(_PRESET_VOICES)
+
+    async def _fetch_system_voices(self) -> list[dict]:
+        """调用 /v1/get_voice API 获取系统音色列表。"""
+        if not self._api_key:
+            return []
+        url = "https://api.minimaxi.com/v1/get_voice"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self._api_key}",
+        }
+        payload = {"voice_type": "system"}
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    url, headers=headers, json=payload
+                ) as resp:
+                    if resp.status != 200:
+                        _log.warning("获取音色列表失败 HTTP %d", resp.status)
+                        return []
+                    data = await resp.json()
+        except Exception as e:
+            _log.warning("获取音色列表异常: %s", e)
+            return []
+        base_resp = data.get("base_resp", {})
+        if base_resp.get("status_code", -1) != 0:
+            _log.warning("获取音色列表 API 错误: %s", base_resp)
+            return []
+        voices = []
+        for v in data.get("system_voice", []):
+            voice_id = v.get("voice_id", "")
+            # voice_name 为空时用 voice_id 截取后半部分
+            friendly = v.get("voice_name", "") or voice_id.rsplit("_", 1)[-1]
+            voices.append({
+                "name": voice_id,
+                "friendly_name": f"{friendly} ({voice_id[:20]}...)",
+                "gender": "Unknown",
+            })
+        return voices
 
     # ------------------------------------------------------------------
     # API Key 验证
