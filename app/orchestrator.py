@@ -78,13 +78,14 @@ class Orchestrator:
         gen = self._speak_gen
 
         voice = voice or self.config.get("voice")
-        rate = self.config.get("rate", "+0%")
-        pitch = self.config.get("pitch", "+0Hz")
         self._busy = True
         callback(SpeakStatus.GENERATING, "正在生成语音...")
-        _log.info("speak() gen=%d text=%r voice=%s rate=%s pitch=%s", gen, text, voice, rate, pitch)
+        _log.info("speak() gen=%d text=%r voice=%s", gen, text, voice)
 
+        rate = self.config.get("rate", "+0%")
+        pitch = self.config.get("pitch", "+0Hz")
         coro = self.tts.synthesize(text, voice, rate=rate, pitch=pitch)
+
         self.bridge.submit(
             coro,
             on_success=lambda fp: self._on_speak_generated(fp, text, voice, callback, gen),
@@ -190,7 +191,8 @@ class Orchestrator:
     # ------------------------------------------------------------------
 
     def get_voices(self, callback: Callable[[list[dict]], None]):
-        self.bridge.submit(self.tts.list_voices(), on_success=callback)
+        coro = self.tts.list_voices()
+        self.bridge.submit(coro, on_success=callback)
 
     # ------------------------------------------------------------------
     # 本地预听
@@ -207,12 +209,13 @@ class Orchestrator:
             return
 
         voice = voice or self.config.get("voice")
-        rate = self.config.get("rate", "+0%")
-        pitch = self.config.get("pitch", "+0Hz")
         self._busy = True
         callback(SpeakStatus.GENERATING, "正在生成预听语音...")
 
+        rate = self.config.get("rate", "+0%")
+        pitch = self.config.get("pitch", "+0Hz")
         coro = self.tts.synthesize(text, voice, rate=rate, pitch=pitch)
+
         self.bridge.submit(
             coro,
             on_success=lambda fp: self._on_preview_generated(fp, callback),

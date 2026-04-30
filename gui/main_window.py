@@ -25,6 +25,8 @@ class MainWindow:
         self._floating_win = None
         self._poll_interval = 5000
 
+        self._voice_var = ctk.StringVar()
+
         self._setup_window()
         self._build_ui()
         self._load_voices()
@@ -60,19 +62,18 @@ class MainWindow:
         card.pack(fill="x", padx=10, pady=(10, 4))
 
         # --- 语音选择行 ---
-        voice_row = ctk.CTkFrame(card, fg_color="transparent")
-        voice_row.pack(fill="x", padx=12)
+        row = ctk.CTkFrame(card, fg_color="transparent")
+        row.pack(fill="x", padx=12, pady=(10, 0))
 
         ctk.CTkLabel(
-            voice_row, text="语音:", font=FONTS["body"],
+            row, text="语音:", font=FONTS["body"],
             text_color=COLORS["text_secondary"], width=40,
         ).pack(side="left")
 
-        self._voice_var = ctk.StringVar(value="zh-CN-XiaoxiaoNeural")
         self._voice_combo = ctk.CTkComboBox(
-            voice_row, variable=self._voice_var, state="readonly",
+            row, variable=self._voice_var, state="readonly",
             values=["加载中..."], font=FONTS["body"],
-            dropdown_font=FONTS["body"], width=320,
+            dropdown_font=FONTS["body"], width=240,
         )
         self._voice_combo.pack(side="left", fill="x", expand=True, padx=(8, 0))
 
@@ -384,9 +385,9 @@ class MainWindow:
     def _load_voices(self):
         def on_loaded(voices: list[dict]):
             self._voices = voices
-            display_names = [f"{v['friendly_name']} ({v['name']})" for v in voices]
+            display_names = [v["friendly_name"] for v in voices]
             self._voice_combo.configure(values=display_names)
-            saved = self._orch.config.get("voice", "zh-CN-XiaoxiaoNeural")
+            saved = self._orch.config.get("voice", "")
             for i, v in enumerate(voices):
                 if v["name"] == saved:
                     self._voice_var.set(display_names[i])
@@ -399,7 +400,7 @@ class MainWindow:
 
     def _resolve_voice_name(self, display: str) -> str:
         for v in self._voices:
-            if v["name"] in display:
+            if v["friendly_name"] == display:
                 name = v["name"]
                 self._orch.config.set("voice", name)
                 return name

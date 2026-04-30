@@ -9,14 +9,22 @@ from app import TTSGenerationError, TTSNetworkError
 
 _log = logging.getLogger("tts_engine")
 
+# zh-CN 语音中文友好名映射（API 返回的 LocalName 为空）
+_FRIENDLY_NAMES: dict[str, str] = {
+    "zh-CN-XiaoxiaoNeural":           "晓晓 (女声·温柔)",
+    "zh-CN-XiaoyiNeural":             "晓伊 (女声·活泼)",
+    "zh-CN-YunjianNeural":            "云健 (男声·沉稳)",
+    "zh-CN-YunxiNeural":              "云希 (男声·年轻)",
+    "zh-CN-YunxiaNeural":             "云夏 (男声·少年)",
+    "zh-CN-YunyangNeural":            "云扬 (男声·新闻)",
+    "zh-CN-liaoning-XiaobeiNeural":   "晓北 (女声·东北话)",
+    "zh-CN-shaanxi-XiaoniNeural":     "晓妮 (女声·陕西话)",
+}
+
 # 中文语音预设 (离线 fallback)
 _CHINESE_VOICES_FALLBACK = [
-    {"name": "zh-CN-XiaoxiaoNeural", "friendly_name": "晓晓 (女声, 温柔)", "gender": "Female"},
-    {"name": "zh-CN-YunxiNeural", "friendly_name": "云希 (男声, 年轻)", "gender": "Male"},
-    {"name": "zh-CN-YunjianNeural", "friendly_name": "云健 (男声, 沉稳)", "gender": "Male"},
-    {"name": "zh-CN-XiaoyiNeural", "friendly_name": "晓伊 (女声, 活泼)", "gender": "Female"},
-    {"name": "zh-CN-YunyangNeural", "friendly_name": "云扬 (男声, 新闻)", "gender": "Male"},
-    {"name": "zh-CN-XiaochenNeural", "friendly_name": "晓辰 (女声, 休闲)", "gender": "Female"},
+    {"name": k, "friendly_name": v, "gender": "Female" if "女声" in v else "Male"}
+    for k, v in _FRIENDLY_NAMES.items()
 ]
 
 
@@ -71,9 +79,11 @@ class TTSEngine:
             chinese_voices = []
             for v in all_voices:
                 if v.get("Locale", "").startswith("zh-CN"):
+                    short = v["ShortName"]
+                    friendly = _FRIENDLY_NAMES.get(short) or v.get("LocalName") or short
                     chinese_voices.append({
-                        "name": v["ShortName"],
-                        "friendly_name": v.get("LocalName", v["ShortName"]),
+                        "name": short,
+                        "friendly_name": friendly,
                         "gender": v.get("Gender", "Unknown"),
                     })
             if chinese_voices:
