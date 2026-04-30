@@ -3,7 +3,20 @@ import threading
 from pathlib import Path
 
 _DEFAULTS = {
+    # 引擎选择
+    "engine": "edge",
+    # Edge TTS 配置
     "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "+0%",
+    "pitch": "+0Hz",
+    # MiniMax 配置
+    "minimax_api_key": "",
+    "minimax_voice_id": "female-shaonv",
+    "minimax_model": "speech-2.8-hd",
+    "minimax_speed": 1.0,
+    "minimax_vol": 1.0,
+    "minimax_pitch": 0,
+    # 通用
     "play_on_speakers": False,
     "play_on_mic": True,
     "auto_cleanup": True,
@@ -13,8 +26,6 @@ _DEFAULTS = {
     "theme": "dark",
     "recent_texts": [],
     "max_recent_texts": 20,
-    "rate": "+0%",
-    "pitch": "+0Hz",
     "quick_phrases": [],
     "auto_cleanup_soundpad": True,
     "floating_geometry": "",

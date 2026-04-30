@@ -8,6 +8,7 @@ from app import SoundpadNotRunningError, TTSSoundpadError
 from app.async_bridge import AsyncBridge
 from app.audio_player import AudioPlayer
 from app.config_manager import ConfigManager
+from app.minimax_engine import MiniMaxEngine
 from app.soundpad import SoundpadController
 from app.tts_engine import TTSEngine
 
@@ -36,16 +37,18 @@ StatusCallback = Callable[[SpeakStatus, str], None]
 
 
 class Orchestrator:
-    """协调 TTS 引擎和 Soundpad 控制器的完整业务流程。"""
+    """协调双 TTS 引擎和 Soundpad 控制器的完整业务流程。"""
 
     def __init__(
         self,
         tts: TTSEngine,
+        minimax: MiniMaxEngine,
         soundpad: SoundpadController,
         bridge: AsyncBridge,
         config: ConfigManager,
     ):
-        self.tts = tts
+        self._edge = tts
+        self._minimax = minimax
         self.soundpad = soundpad
         self.bridge = bridge
         self.config = config
@@ -54,6 +57,29 @@ class Orchestrator:
         self._busy = False
         self._speak_gen = 0
         self._tts_indices: list[int] = []
+
+    # ------------------------------------------------------------------
+    # 引擎路由
+    # ------------------------------------------------------------------
+
+    def _get_active_engine(self):
+        """根据配置返回当前激活的引擎实例。"""
+        if self.config.get("engine") == "minimax":
+            return self._minimax
+        return self._edge
+
+    def _build_engine_params(self) -> dict:
+        """根据当前引擎构建合成参数。"""
+        if self.config.get("engine") == "minimax":
+            return {
+                "speed": self.config.get("minimax_speed", 1.0),
+                "vol": self.config.get("minimax_vol", 1.0),
+                "pitch": self.config.get("minimax_pitch", 0),
+            }
+        return {
+            "rate": self.config.get("rate", "+0%"),
+            "pitch": self.config.get("pitch", "+0Hz"),
+        }
 
     @property
     def is_busy(self) -> bool:
@@ -82,9 +108,9 @@ class Orchestrator:
         callback(SpeakStatus.GENERATING, "正在生成语音...")
         _log.info("speak() gen=%d text=%r voice=%s", gen, text, voice)
 
-        rate = self.config.get("rate", "+0%")
-        pitch = self.config.get("pitch", "+0Hz")
-        coro = self.tts.synthesize(text, voice, rate=rate, pitch=pitch)
+        engine = self._get_active_engine()
+        params = self._build_engine_params()
+        coro = engine.synthesize(text, voice, **params)
 
         self.bridge.submit(
             coro,
@@ -191,7 +217,17 @@ class Orchestrator:
     # ------------------------------------------------------------------
 
     def get_voices(self, callback: Callable[[list[dict]], None]):
-        coro = self.tts.list_voices()
+        engine = self._get_active_engine()
+        coro = engine.list_voices()
+        self.bridge.submit(coro, on_success=callback)
+
+    # ------------------------------------------------------------------
+    # MiniMax API Key 验证
+    # ------------------------------------------------------------------
+
+    def verify_minimax_key(self, callback: Callable[[bool, str], None]):
+        """异步验证 MiniMax API Key。"""
+        coro = self._minimax.verify_api_key()
         self.bridge.submit(coro, on_success=callback)
 
     # ------------------------------------------------------------------
@@ -212,9 +248,9 @@ class Orchestrator:
         self._busy = True
         callback(SpeakStatus.GENERATING, "正在生成预听语音...")
 
-        rate = self.config.get("rate", "+0%")
-        pitch = self.config.get("pitch", "+0Hz")
-        coro = self.tts.synthesize(text, voice, rate=rate, pitch=pitch)
+        engine = self._get_active_engine()
+        params = self._build_engine_params()
+        coro = engine.synthesize(text, voice, **params)
 
         self.bridge.submit(
             coro,

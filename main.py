@@ -26,6 +26,7 @@ _log = logging.getLogger("main")
 
 from app.async_bridge import AsyncBridge
 from app.config_manager import ConfigManager
+from app.minimax_engine import MiniMaxEngine
 from app.orchestrator import Orchestrator
 from app.soundpad import SoundpadController
 from app.tts_engine import TTSEngine
@@ -57,7 +58,19 @@ def main():
 
     # 初始化各模块
     config = ConfigManager(config_dir)
-    tts = TTSEngine(cache_dir, default_voice=config.get("voice"))
+
+    # Edge TTS 引擎
+    edge_tts = TTSEngine(cache_dir, default_voice=config.get("voice"))
+
+    # MiniMax 引擎（使用独立的缓存子目录避免文件名冲突）
+    mm_cache = cache_dir / "minimax"
+    minimax = MiniMaxEngine(
+        cache_dir=mm_cache,
+        api_key=config.get("minimax_api_key", ""),
+        model=config.get("minimax_model", "speech-2.8-hd"),
+        default_voice=config.get("minimax_voice_id", "female-shaonv"),
+    )
+
     soundpad = SoundpadController()
 
     # 创建 tkinter 根窗口
@@ -66,11 +79,12 @@ def main():
     # 初始化异步桥接 (需要 root 用于线程安全回调)
     bridge = AsyncBridge(root)
 
-    # 初始化协调器
-    orch = Orchestrator(tts, soundpad, bridge, config)
+    # 初始化协调器（双引擎）
+    orch = Orchestrator(edge_tts, minimax, soundpad, bridge, config)
 
     # 启动时清理旧缓存
-    tts.cleanup_old_files()
+    edge_tts.cleanup_old_files()
+    minimax.cleanup_old_files()
 
     # 创建主窗口
     window = MainWindow(root, orch)

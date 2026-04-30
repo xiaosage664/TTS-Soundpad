@@ -26,6 +26,8 @@ class MainWindow:
         self._poll_interval = 5000
 
         self._voice_var = ctk.StringVar()
+        self._engine_var = ctk.StringVar(value=self._orch.config.get("engine", "edge"))
+        self._engine_var.trace_add("write", lambda *_: self._on_engine_change())
 
         self._setup_window()
         self._build_ui()
@@ -55,35 +57,159 @@ class MainWindow:
         self._build_phrases_card()
         self._build_history_card()
         self._build_status_bar()
+        self._update_engine_ui()
 
     def _build_header_card(self):
-        """设置卡片：语音选择、语速音调、输出。"""
+        """设置卡片：引擎选择、语音选择、语速音调、输出。"""
         card = _card(self._root)
         card.pack(fill="x", padx=10, pady=(10, 4))
 
-        # --- 语音选择行 ---
-        row = ctk.CTkFrame(card, fg_color="transparent")
-        row.pack(fill="x", padx=12, pady=(10, 0))
+        # --- 引擎选择行 ---
+        engine_row = ctk.CTkFrame(card, fg_color="transparent")
+        engine_row.pack(fill="x", padx=12, pady=(10, 4))
 
         ctk.CTkLabel(
-            row, text="语音:", font=FONTS["body"],
+            engine_row, text="引擎:", font=FONTS["body"],
+            text_color=COLORS["text_secondary"], width=40,
+        ).pack(side="left")
+
+        self._engine_selector = ctk.CTkSegmentedButton(
+            engine_row,
+            values=["Edge TTS", "MiniMax"],
+            variable=self._engine_var,
+            font=FONTS["body"],
+            selected_color=COLORS["accent"],
+            selected_hover_color=COLORS["accent_hover"],
+            command=self._on_engine_switch,
+        )
+        self._engine_selector.pack(side="left", fill="x", expand=True, padx=(8, 0))
+
+        # --- 语音选择行 ---
+        voice_row = ctk.CTkFrame(card, fg_color="transparent")
+        voice_row.pack(fill="x", padx=12, pady=(4, 0))
+
+        ctk.CTkLabel(
+            voice_row, text="语音:", font=FONTS["body"],
             text_color=COLORS["text_secondary"], width=40,
         ).pack(side="left")
 
         self._voice_combo = ctk.CTkComboBox(
-            row, variable=self._voice_var, state="readonly",
+            voice_row, variable=self._voice_var, state="readonly",
             values=["加载中..."], font=FONTS["body"],
             dropdown_font=FONTS["body"], width=240,
         )
         self._voice_combo.pack(side="left", fill="x", expand=True, padx=(8, 0))
 
-        # --- 语速/音调 ---
+        # --- Edge TTS 控制区 ---
+        self._edge_frame = ctk.CTkFrame(card, fg_color="transparent")
+        self._edge_frame.pack(fill="x", padx=12, pady=(4, 0))
+
         self._rate_pitch = RatePitchControl(
-            card, on_change=self._on_rate_pitch_change,
+            self._edge_frame, on_change=self._on_rate_pitch_change,
         )
-        self._rate_pitch.pack(fill="x", padx=12, pady=(4, 0))
+        self._rate_pitch.pack(fill="x")
         self._rate_pitch.set_rate(self._orch.config.get("rate", "+0%"))
         self._rate_pitch.set_pitch(self._orch.config.get("pitch", "+0Hz"))
+
+        # --- MiniMax 控制区 ---
+        self._minimax_frame = ctk.CTkFrame(card, fg_color="transparent")
+
+        # API Key
+        api_row = ctk.CTkFrame(self._minimax_frame, fg_color="transparent")
+        api_row.pack(fill="x", pady=(4, 2))
+        ctk.CTkLabel(
+            api_row, text="API Key:", font=FONTS["small"],
+            text_color=COLORS["text_secondary"], width=55,
+        ).pack(side="left")
+        self._minimax_api_entry = ctk.CTkEntry(
+            api_row, font=FONTS["small"],
+            placeholder_text="输入 MiniMax API Key",
+            show="*", height=28,
+        )
+        self._minimax_api_entry.pack(side="left", fill="x", expand=True, padx=(4, 0))
+        self._minimax_verify_btn = ctk.CTkButton(
+            api_row, text="验证", font=FONTS["small"],
+            width=50, height=28,
+            fg_color=COLORS["accent"], hover_color=COLORS["accent_hover"],
+            command=self._on_verify_minimax_key,
+        )
+        self._minimax_verify_btn.pack(side="left", padx=(4, 0))
+        saved_key = self._orch.config.get("minimax_api_key", "")
+        if saved_key:
+            self._minimax_api_entry.insert(0, saved_key)
+        self._minimax_api_entry.bind("<FocusOut>", lambda e: self._save_minimax_config())
+
+        # Speed
+        speed_row = ctk.CTkFrame(self._minimax_frame, fg_color="transparent")
+        speed_row.pack(fill="x", pady=2)
+        ctk.CTkLabel(
+            speed_row, text="语速:", font=FONTS["small"],
+            text_color=COLORS["text_secondary"], width=55,
+        ).pack(side="left")
+        self._mm_speed_label = ctk.CTkLabel(
+            speed_row, text=f'{self._orch.config.get("minimax_speed", 1.0):.1f}',
+            font=FONTS["small"], text_color=COLORS["accent"], width=35,
+        )
+        self._mm_speed_label.pack(side="right", padx=(4, 0))
+        self._mm_speed_slider = ctk.CTkSlider(
+            speed_row, from_=0.5, to=2.0, number_of_steps=15,
+            width=200, height=16,
+            fg_color=COLORS["accent_dim"],
+            progress_color=COLORS["accent"],
+            button_color=COLORS["accent"],
+            button_hover_color=COLORS["accent_hover"],
+            command=self._on_mm_speed_change,
+        )
+        self._mm_speed_slider.set(self._orch.config.get("minimax_speed", 1.0))
+        self._mm_speed_slider.pack(side="left", fill="x", expand=True, padx=(4, 4))
+
+        # Volume
+        vol_row = ctk.CTkFrame(self._minimax_frame, fg_color="transparent")
+        vol_row.pack(fill="x", pady=2)
+        ctk.CTkLabel(
+            vol_row, text="音量:", font=FONTS["small"],
+            text_color=COLORS["text_secondary"], width=55,
+        ).pack(side="left")
+        self._mm_vol_label = ctk.CTkLabel(
+            vol_row, text=f'{self._orch.config.get("minimax_vol", 1.0):.1f}',
+            font=FONTS["small"], text_color=COLORS["accent"], width=35,
+        )
+        self._mm_vol_label.pack(side="right", padx=(4, 0))
+        self._mm_vol_slider = ctk.CTkSlider(
+            vol_row, from_=0, to=10, number_of_steps=20,
+            width=200, height=16,
+            fg_color=COLORS["accent_dim"],
+            progress_color=COLORS["accent"],
+            button_color=COLORS["accent"],
+            button_hover_color=COLORS["accent_hover"],
+            command=self._on_mm_vol_change,
+        )
+        self._mm_vol_slider.set(self._orch.config.get("minimax_vol", 1.0))
+        self._mm_vol_slider.pack(side="left", fill="x", expand=True, padx=(4, 4))
+
+        # Pitch
+        pitch_row = ctk.CTkFrame(self._minimax_frame, fg_color="transparent")
+        pitch_row.pack(fill="x", pady=2)
+        ctk.CTkLabel(
+            pitch_row, text="音调:", font=FONTS["small"],
+            text_color=COLORS["text_secondary"], width=55,
+        ).pack(side="left")
+        self._mm_pitch_label = ctk.CTkLabel(
+            pitch_row, text=f'{self._orch.config.get("minimax_pitch", 0):+d}',
+            font=FONTS["small"], text_color=COLORS["accent"], width=35,
+        )
+        self._mm_pitch_label.pack(side="right", padx=(4, 0))
+        self._mm_pitch_slider = ctk.CTkSlider(
+            pitch_row, from_=-12, to=12, number_of_steps=24,
+            width=200, height=16,
+            fg_color=COLORS["accent_dim"],
+            progress_color=COLORS["accent"],
+            button_color=COLORS["accent"],
+            button_hover_color=COLORS["accent_hover"],
+            command=self._on_mm_pitch_change,
+        )
+        self._mm_pitch_slider.set(self._orch.config.get("minimax_pitch", 0))
+        self._mm_pitch_slider.pack(side="left", fill="x", expand=True, padx=(4, 4))
 
         # --- 输出选项行 ---
         output_row = ctk.CTkFrame(card, fg_color="transparent")
@@ -117,6 +243,78 @@ class MainWindow:
             output_row, text="自动清理", variable=self._cleanup_var,
             font=FONTS["small"], command=self._save_output_config,
         ).pack(side="right", padx=(8, 0))
+
+    # ------------------------------------------------------------------
+    # 引擎切换
+    # ------------------------------------------------------------------
+
+    def _on_engine_switch(self, choice: str):
+        engine_key = "minimax" if choice == "MiniMax" else "edge"
+        self._orch.config.set("engine", engine_key)
+        self._update_engine_ui()
+        self._load_voices()
+
+    def _on_engine_change(self):
+        """engine_var trace 回调，保持引擎切换时 UI 同步。"""
+        # 按键切换由 _on_engine_switch 处理，此处仅用于变量同步
+        pass
+
+    def _update_engine_ui(self):
+        """切换 Edge / MiniMax 控制面板可见性。"""
+        is_minimax = self._engine_var.get() == "MiniMax"
+        if is_minimax:
+            self._edge_frame.pack_forget()
+            self._minimax_frame.pack(fill="x", padx=12, pady=(4, 0))
+        else:
+            self._minimax_frame.pack_forget()
+            self._edge_frame.pack(fill="x", padx=12, pady=(4, 0))
+
+    # ------------------------------------------------------------------
+    # MiniMax 控件回调
+    # ------------------------------------------------------------------
+
+    def _on_mm_speed_change(self, value):
+        v = round(value, 1)
+        self._mm_speed_label.configure(text=f"{v:.1f}")
+        self._orch.config.set("minimax_speed", v)
+
+    def _on_mm_vol_change(self, value):
+        v = round(value, 1)
+        self._mm_vol_label.configure(text=f"{v:.1f}")
+        self._orch.config.set("minimax_vol", v)
+
+    def _on_mm_pitch_change(self, value):
+        v = int(round(value))
+        self._mm_pitch_label.configure(text=f"{v:+d}")
+        self._orch.config.set("minimax_pitch", v)
+
+    def _save_minimax_config(self):
+        api_key = self._minimax_api_entry.get().strip()
+        self._orch.config.set("minimax_api_key", api_key)
+
+    def _on_verify_minimax_key(self):
+        """验证 MiniMax API Key。"""
+        self._save_minimax_config()
+        self._minimax_verify_btn.configure(state="disabled", text="验证中...")
+        self._orch.verify_minimax_key(self._on_minimax_key_verified)
+
+    def _on_minimax_key_verified(self, success: bool, message: str):
+        self._minimax_verify_btn.configure(state="normal", text="验证")
+        if success:
+            self._status_bar.set_status(message, auto_clear=5000)
+        else:
+            self._status_bar.set_status(message, is_error=True)
+
+    # ------------------------------------------------------------------
+    # Edge TTS 控件回调
+    # ------------------------------------------------------------------
+
+    def _on_rate_pitch_change(self, key: str, value: str):
+        self._orch.config.set(key, value)
+
+    # ------------------------------------------------------------------
+    # 输入区
+    # ------------------------------------------------------------------
 
     def _build_input_card(self):
         """输入卡片：文本框 + 按钮行。"""
@@ -186,6 +384,10 @@ class MainWindow:
             text_color=COLORS["text_dim"], width=60,
         )
         self._char_label.pack(side="right", padx=(8, 0))
+
+    # ------------------------------------------------------------------
+    # 底层卡片
+    # ------------------------------------------------------------------
 
     def _build_phrases_card(self):
         """快捷短语卡片（标题已集成在 QuickPhrasePanel 内部）。"""
@@ -337,9 +539,6 @@ class MainWindow:
         self._orch.config.set("play_on_speakers", self._speaker_var.get())
         self._orch.config.set("auto_cleanup_soundpad", self._cleanup_var.get())
 
-    def _on_rate_pitch_change(self, key: str, value: str):
-        self._orch.config.set(key, value)
-
     # ------------------------------------------------------------------
     # 快捷短语
     # ------------------------------------------------------------------
@@ -387,7 +586,11 @@ class MainWindow:
             self._voices = voices
             display_names = [v["friendly_name"] for v in voices]
             self._voice_combo.configure(values=display_names)
-            saved = self._orch.config.get("voice", "")
+
+            # 根据当前引擎选择合适的默认语音
+            engine = self._orch.config.get("engine")
+            saved_key = "minimax_voice_id" if engine == "minimax" else "voice"
+            saved = self._orch.config.get(saved_key, "")
             for i, v in enumerate(voices):
                 if v["name"] == saved:
                     self._voice_var.set(display_names[i])
@@ -402,7 +605,10 @@ class MainWindow:
         for v in self._voices:
             if v["friendly_name"] == display:
                 name = v["name"]
-                self._orch.config.set("voice", name)
+                # 保存到对应引擎的配置
+                engine = self._orch.config.get("engine")
+                key = "minimax_voice_id" if engine == "minimax" else "voice"
+                self._orch.config.set(key, name)
                 return name
         return display
 
