@@ -56,6 +56,7 @@ class Orchestrator:
         self.history: list[HistoryItem] = []
         self._busy = False
         self._speak_gen = 0
+        self._soundpad_lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # 引擎路由
@@ -128,23 +129,24 @@ class Orchestrator:
         callback(SpeakStatus.SENDING, "正在发送到 Soundpad...")
 
         def _do_soundpad_io():
-            try:
-                new_index = self._send_to_soundpad(file_path)
-                self.history.insert(0, HistoryItem(text, voice, file_path))
-                self.config.add_recent_text(text)
-                self.bridge.root.after(0, lambda: self._finish_speak(callback, True, gen=gen))
-            except SoundpadNotRunningError as e:
-                _log.error("SoundpadNotRunningError: %s", e)
-                msg = "Soundpad 未运行，请先启动 Soundpad"
-                self.bridge.root.after(0, lambda: self._finish_speak(callback, False, msg, gen=gen))
-            except TTSSoundpadError as e:
-                _log.error("TTSSoundpadError: %s", e)
-                msg = str(e)
-                self.bridge.root.after(0, lambda: self._finish_speak(callback, False, msg, gen=gen))
-            except Exception as e:
-                _log.error("未知异常: %s", e, exc_info=True)
-                msg = f"发送失败: {e}"
-                self.bridge.root.after(0, lambda: self._finish_speak(callback, False, msg, gen=gen))
+            with self._soundpad_lock:
+                try:
+                    new_index = self._send_to_soundpad(file_path)
+                    self.history.insert(0, HistoryItem(text, voice, file_path))
+                    self.config.add_recent_text(text)
+                    self.bridge.root.after(0, lambda: self._finish_speak(callback, True, gen=gen))
+                except SoundpadNotRunningError as e:
+                    _log.error("SoundpadNotRunningError: %s", e)
+                    msg = "Soundpad 未运行，请先启动 Soundpad"
+                    self.bridge.root.after(0, lambda: self._finish_speak(callback, False, msg, gen=gen))
+                except TTSSoundpadError as e:
+                    _log.error("TTSSoundpadError: %s", e)
+                    msg = str(e)
+                    self.bridge.root.after(0, lambda: self._finish_speak(callback, False, msg, gen=gen))
+                except Exception as e:
+                    _log.error("未知异常: %s", e, exc_info=True)
+                    msg = f"发送失败: {e}"
+                    self.bridge.root.after(0, lambda: self._finish_speak(callback, False, msg, gen=gen))
 
         threading.Thread(target=_do_soundpad_io, daemon=True).start()
 

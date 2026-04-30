@@ -1,6 +1,7 @@
 import ctypes
 import ctypes.wintypes
 import logging
+import time
 from pathlib import Path
 
 from app import SoundpadCommandError, SoundpadNotRunningError
@@ -231,14 +232,33 @@ class SoundpadController:
         raw = _send_raw("DoRemoveSelectedEntries()")
         _parse_response("DoRemoveSelectedEntries", raw)
 
+    def trim_to_count(self, max_items: int) -> int:
+        """裁剪 Soundpad 列表到指定数量，从最旧的条目（索引1）开始删除。"""
+        count = self.get_sound_count()
+        removed = 0
+        while count > max_items:
+            try:
+                self.select_index(1)
+                self.remove_selected()
+                count -= 1
+                removed += 1
+                time.sleep(0.05)
+            except SoundpadCommandError:
+                break
+        if removed:
+            _log.info("trim_to_count 删除了 %d 个旧条目，剩余 %d", removed, count)
+        return removed
+
     def play_tts_file(self, file_path: str, speakers: bool = False, mic: bool = True) -> int:
         """
-        组合操作：添加音频文件 -> 等待列表更新 -> 播放。
+        组合操作：裁剪旧条目 -> 添加音频文件 -> 等待列表更新 -> 播放。
         返回音频在 Soundpad 列表中的索引。
         """
-        import time
-
+        MAX_ITEMS = 20
         _log.info("play_tts_file file=%s speakers=%s mic=%s", file_path, speakers, mic)
+
+        self.trim_to_count(MAX_ITEMS - 1)
+
         count_before = self.get_sound_count()
         _log.info("  count_before=%d", count_before)
         self.add_sound(file_path)
