@@ -58,7 +58,7 @@ class TTSEngine:
 
         try:
             communicate = edge_tts.Communicate(text, voice, rate=rate, pitch=pitch)
-            await communicate.save(str(output_path))
+            await asyncio.wait_for(communicate.save(str(output_path)), timeout=30)
         except Exception as e:
             err_msg = str(e).lower()
             if "connect" in err_msg or "timeout" in err_msg or "network" in err_msg:

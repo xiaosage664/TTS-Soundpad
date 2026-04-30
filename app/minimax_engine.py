@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 
 import aiohttp
+from aiohttp import ClientTimeout
 
 from app import TTSGenerationError, TTSNetworkError
 from app.audio_cache import cache_path_for, make_cache_key, try_cache
@@ -126,7 +127,7 @@ class MiniMaxEngine:
         )
 
         try:
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(timeout=ClientTimeout(total=30)) as session:
                 async with session.post(url, headers=headers, json=payload) as resp:
                     if resp.status != 200:
                         body = await resp.text()
@@ -191,7 +192,7 @@ class MiniMaxEngine:
         }
         payload = {"voice_type": "system"}
         try:
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(timeout=ClientTimeout(total=30)) as session:
                 async with session.post(
                     url, headers=headers, json=payload
                 ) as resp:
@@ -251,7 +252,7 @@ class MiniMaxEngine:
         }
 
         try:
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(timeout=ClientTimeout(total=30)) as session:
                 async with session.post(url, headers=headers, json=payload) as resp:
                     if resp.status == 401:
                         return False, "API Key 无效（401 未授权）"

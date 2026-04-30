@@ -490,8 +490,8 @@ class MainWindow:
             )
             self._status_bar.set_status(detail, auto_clear=3000)
             self._flash_send_btn()
-            if self._orch.history:
-                h = self._orch.history[0]
+            h = self._orch.get_latest_history()
+            if h:
                 self._history.add_entry(h.timestamp, h.text, h.voice)
             self._textbox.delete("1.0", "end")
             self._update_char_count()
@@ -670,8 +670,8 @@ class MainWindow:
             if self._floating_win and self._floating_win.winfo_exists():
                 self._floating_win.set_busy(False)
                 self._floating_win.clear_entry()
-            if self._orch.history:
-                h = self._orch.history[0]
+            h = self._orch.get_latest_history()
+            if h:
                 self._history.add_entry(h.timestamp, h.text, h.voice)
         elif status == SpeakStatus.ERROR:
             self._status_bar.set_status(detail, is_error=True)

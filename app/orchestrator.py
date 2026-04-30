@@ -57,6 +57,7 @@ class Orchestrator:
         self._busy = False
         self._speak_gen = 0
         self._soundpad_lock = threading.Lock()
+        self._history_lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # 引擎路由
@@ -132,7 +133,8 @@ class Orchestrator:
             with self._soundpad_lock:
                 try:
                     new_index = self._send_to_soundpad(file_path)
-                    self.history.insert(0, HistoryItem(text, voice, file_path))
+                    with self._history_lock:
+                        self.history.insert(0, HistoryItem(text, voice, file_path))
                     self.config.add_recent_text(text)
                     self.bridge.root.after(0, lambda: self._finish_speak(callback, True, gen=gen))
                 except SoundpadNotRunningError as e:
@@ -152,20 +154,20 @@ class Orchestrator:
 
     def _finish_speak(self, callback: StatusCallback, success: bool, error_msg: str = "", *, gen: int = 0):
         """在主线程上完成 speak 流程的最终回调。"""
+        self._busy = False
         if gen != self._speak_gen:
             _log.info("finish_speak gen=%d 已过期 (当前=%d)，忽略", gen, self._speak_gen)
             return
-        self._busy = False
         if success:
             callback(SpeakStatus.PLAYING, "播放中")
         else:
             callback(SpeakStatus.ERROR, error_msg)
 
     def _on_speak_error(self, exc: Exception, callback: StatusCallback, gen: int):
+        self._busy = False
         if gen != self._speak_gen:
             return
         _log.error("TTS 生成失败: %s", exc, exc_info=True)
-        self._busy = False
         callback(SpeakStatus.ERROR, str(exc))
 
     def _send_to_soundpad(self, file_path: str) -> int:
@@ -183,6 +185,7 @@ class Orchestrator:
     # ------------------------------------------------------------------
 
     def stop(self):
+        self._speak_gen += 1
         try:
             self.soundpad.stop_sound()
         except TTSSoundpadError:
@@ -194,6 +197,12 @@ class Orchestrator:
 
     def check_soundpad(self) -> bool:
         return self.soundpad.is_running()
+
+    def get_latest_history(self):
+        with self._history_lock:
+            if self.history:
+                return self.history[0]
+            return None
 
     # ------------------------------------------------------------------
     # 语音列表
