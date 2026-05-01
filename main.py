@@ -5,9 +5,6 @@ from pathlib import Path
 
 import customtkinter as ctk
 
-# 确保项目根目录在 sys.path 中
-# PyInstaller --onefile 模式下 __file__ 指向临时解压目录，
-# 需要用 sys.executable 的目录作为项目根目录
 if getattr(sys, "frozen", False):
     _ROOT = Path(sys.executable).parent.resolve()
 else:
@@ -15,7 +12,6 @@ else:
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-# 全局日志 -> 文件 (仅记录 INFO 及以上)
 _LOG_FILE = _ROOT / "tts_debug.log"
 logging.basicConfig(
     filename=str(_LOG_FILE),
@@ -35,35 +31,57 @@ from gui.main_window import MainWindow
 
 
 def _get_cache_dir() -> Path:
-    """选择音频缓存目录。
-
-    Soundpad Named Pipe 不支持 Unicode 路径，
-    如果 exe 所在目录包含非 ASCII 字符（如中文用户名），
-    则将缓存放到 C:\\ProgramData\\TTS_Soundpad\\audio_cache。
-    """
     local_cache = _ROOT / "audio_cache"
     if all(ord(c) < 128 for c in str(local_cache)):
         return local_cache
-    # 路径含非 ASCII，使用 ProgramData（始终纯 ASCII）
-    fallback = Path(os.environ.get("ProgramData", "C:/ProgramData")) / "TTS_Soundpad" / "audio_cache"
+    fallback = (
+        Path(os.environ.get("ProgramData", "C:/ProgramData"))
+        / "TTS_Soundpad"
+        / "audio_cache"
+    )
     _log.info("路径含非 ASCII 字符，缓存目录切换为: %s", fallback)
     return fallback
 
 
+def _get_model_dir() -> Path:
+    """选择模型下载目录（本地引擎模型存储）。"""
+    local_models = _ROOT / "models"
+    if all(ord(c) < 128 for c in str(local_models)):
+        return local_models
+    fallback = (
+        Path(os.environ.get("ProgramData", "C:/ProgramData"))
+        / "TTS_Soundpad"
+        / "models"
+    )
+    _log.info("路径含非 ASCII 字符，模型目录切换为: %s", fallback)
+    return fallback
+
+
+def _detect_available_engines(piper, gpt_sovits) -> list[str]:
+    """返回当前环境中可用的引擎列表。"""
+    engines = ["edge", "minimax"]
+    if piper is not None:
+        engines.append("piper")
+    else:
+        _log.info("Piper 引擎不可用（piper-tts 未安装）")
+    if gpt_sovits is not None:
+        engines.append("gpt-sovits")
+    else:
+        _log.info("GPT-SoVITS 引擎不可用（未安装）")
+    return engines
+
+
 def main():
-    # 目录准备
     cache_dir = _get_cache_dir()
+    model_dir = _get_model_dir()
     config_dir = _ROOT / "config"
     cache_dir.mkdir(parents=True, exist_ok=True)
     config_dir.mkdir(exist_ok=True)
 
-    # 初始化各模块
     config = ConfigManager(config_dir)
 
-    # Edge TTS 引擎
     edge_tts = TTSEngine(cache_dir, default_voice=config.get("voice"))
 
-    # MiniMax 引擎（使用独立的缓存子目录避免文件名冲突）
     mm_cache = cache_dir / "minimax"
     minimax = MiniMaxEngine(
         cache_dir=mm_cache,
@@ -72,21 +90,50 @@ def main():
         default_voice=config.get("minimax_voice_id", "female-shaonv"),
     )
 
+    piper = None
+    try:
+        from app.piper_engine import PiperEngine
+
+        piper = PiperEngine(
+            cache_dir=cache_dir / "piper",
+            model_dir=model_dir,
+            default_voice=config.get("piper_voice", "yanran"),
+            quality=config.get("piper_quality", "high"),
+        )
+        _log.info("Piper 引擎初始化成功")
+    except ImportError as e:
+        _log.warning("Piper 引擎初始化失败: %s", e)
+    except Exception as e:
+        _log.error("Piper 引擎初始化异常: %s", e, exc_info=True)
+
+    gpt_sovits = None
+    try:
+        from app.gpt_sovits_engine import GPTSoVITSEngine
+
+        gpt_sovits = GPTSoVITSEngine(
+            cache_dir=cache_dir / "gpt_sovits",
+            model_dir=model_dir,
+        )
+        _log.info("GPT-SoVITS 引擎初始化成功")
+    except ImportError as e:
+        _log.warning("GPT-SoVITS 引擎初始化失败: %s", e)
+    except Exception as e:
+        _log.error("GPT-SoVITS 引擎初始化异常: %s", e, exc_info=True)
+
+    available_engines = _detect_available_engines(piper, gpt_sovits)
+
     soundpad = SoundpadController()
 
-    # 创建 tkinter 根窗口
     root = ctk.CTk()
-
-    # 初始化异步桥接 (需要 root 用于线程安全回调)
     bridge = AsyncBridge(root)
 
-    # 初始化协调器（双引擎）
-    orch = Orchestrator(edge_tts, minimax, soundpad, bridge, config)
+    orch = Orchestrator(
+        edge_tts, minimax, soundpad, bridge, config,
+        piper=piper, gpt_sovits=gpt_sovits,
+    )
 
-    # 创建主窗口
-    window = MainWindow(root, orch)
+    window = MainWindow(root, orch, available_engines=available_engines)
 
-    # 关闭窗口时退出程序
     def on_closing():
         window.save_state()
         orch.player.cleanup()
@@ -94,8 +141,6 @@ def main():
         root.destroy()
 
     root.protocol("WM_DELETE_WINDOW", on_closing)
-
-    # 启动主循环
     root.mainloop()
 
 

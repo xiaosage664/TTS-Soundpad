@@ -8,9 +8,7 @@ from app import SoundpadNotRunningError, TTSSoundpadError
 from app.async_bridge import AsyncBridge
 from app.audio_player import AudioPlayer
 from app.config_manager import ConfigManager
-from app.minimax_engine import MiniMaxEngine
 from app.soundpad import SoundpadController
-from app.tts_engine import TTSEngine
 
 _log = logging.getLogger("orchestrator")
 
@@ -37,18 +35,25 @@ StatusCallback = Callable[[SpeakStatus, str], None]
 
 
 class Orchestrator:
-    """协调双 TTS 引擎和 Soundpad 控制器的完整业务流程。"""
+    """协调多 TTS 引擎和 Soundpad 控制器的完整业务流程。
+
+    支持引擎：Edge TTS / MiniMax / Piper / GPT-SoVITS
+    """
 
     def __init__(
         self,
-        tts: TTSEngine,
-        minimax: MiniMaxEngine,
+        tts,            # TTSEngine
+        minimax,        # MiniMaxEngine
         soundpad: SoundpadController,
         bridge: AsyncBridge,
         config: ConfigManager,
+        piper=None,         # PiperEngine | None
+        gpt_sovits=None,    # GPTSoVITSEngine | None
     ):
         self._edge = tts
         self._minimax = minimax
+        self._piper = piper
+        self._gpt_sovits = gpt_sovits
         self.soundpad = soundpad
         self.bridge = bridge
         self.config = config
@@ -65,17 +70,63 @@ class Orchestrator:
 
     def _get_active_engine(self):
         """根据配置返回当前激活的引擎实例。"""
-        if self.config.get("engine") == "minimax":
+        engine_key = self.config.get("engine", "edge")
+        if engine_key == "minimax":
             return self._minimax
+        if engine_key == "piper" and self._piper is not None:
+            return self._piper
+        if engine_key == "gpt-sovits" and self._gpt_sovits is not None:
+            return self._gpt_sovits
         return self._edge
+
+    def _get_engine_key(self) -> str:
+        return self.config.get("engine", "edge")
+
+    @property
+    def engine_key(self) -> str:
+        return self._get_engine_key()
+
+    @staticmethod
+    def engine_available(engine: str, piper=None, gpt_sovits=None) -> bool:
+        """检查指定引擎在当前环境中是否可用。"""
+        if engine in ("edge", "minimax"):
+            return True
+        if engine == "piper":
+            return piper is not None
+        if engine == "gpt-sovits":
+            return gpt_sovits is not None
+        return False
+
+    # ------------------------------------------------------------------
+    # 参数构建
+    # ------------------------------------------------------------------
 
     def _build_engine_params(self) -> dict:
         """根据当前引擎构建合成参数。"""
-        if self.config.get("engine") == "minimax":
+        engine = self._get_engine_key()
+        if engine == "minimax":
             return {
                 "speed": self.config.get("minimax_speed", 1.0),
                 "vol": self.config.get("minimax_vol", 1.0),
                 "pitch": self.config.get("minimax_pitch", 0),
+            }
+        if engine == "piper":
+            return {
+                "quality": self.config.get("piper_quality", "high"),
+                "length_scale": self.config.get("piper_length_scale", 1.0),
+                "noise_scale": self.config.get("piper_noise_scale", 0.667),
+                "noise_w": self.config.get("piper_noise_w", 0.8),
+            }
+        if engine == "gpt-sovits":
+            return {
+                "ref_audio_path": self.config.get("gpt_sovits_ref_audio", ""),
+                "prompt_text": self.config.get("gpt_sovits_prompt_text", ""),
+                "prompt_lang": self.config.get("gpt_sovits_prompt_lang", "zh"),
+                "text_lang": self.config.get("gpt_sovits_text_lang", "zh"),
+                "top_k": self.config.get("gpt_sovits_top_k", 15),
+                "top_p": self.config.get("gpt_sovits_top_p", 0.8),
+                "temperature": self.config.get("gpt_sovits_temperature", 0.8),
+                "speed_factor": self.config.get("gpt_sovits_speed", 1.0),
             }
         return {
             "rate": self.config.get("rate", "+0%"),
@@ -100,6 +151,15 @@ class Orchestrator:
             callback(SpeakStatus.ERROR, f"文本超过 {max_len} 字限制")
             return
 
+        engine_key = self._get_engine_key()
+
+        # GPT-SoVITS 需要参考音频
+        if engine_key == "gpt-sovits" and self._gpt_sovits is not None:
+            ref_audio = self.config.get("gpt_sovits_ref_audio", "")
+            if not ref_audio:
+                callback(SpeakStatus.ERROR, "请先选择参考音频")
+                return
+
         # 新请求覆盖旧请求：递增计数器使旧回调失效
         self._speak_gen += 1
         gen = self._speak_gen
@@ -107,7 +167,7 @@ class Orchestrator:
         voice = voice or self.config.get("voice")
         self._busy = True
         callback(SpeakStatus.GENERATING, "正在生成语音...")
-        _log.info("speak() gen=%d text=%r voice=%s", gen, text, voice)
+        _log.info("speak() gen=%d engine=%s text=%r voice=%s", gen, engine_key, text[:50], voice)
 
         engine = self._get_active_engine()
         params = self._build_engine_params()
@@ -132,7 +192,7 @@ class Orchestrator:
         def _do_soundpad_io():
             with self._soundpad_lock:
                 try:
-                    new_index = self._send_to_soundpad(file_path)
+                    self._send_to_soundpad(file_path)
                     with self._history_lock:
                         self.history.insert(0, HistoryItem(text, voice, file_path))
                     self.config.add_recent_text(text)
@@ -227,6 +287,26 @@ class Orchestrator:
         )
 
     # ------------------------------------------------------------------
+    # GPT-SoVITS 模型初始化（耗时操作，在后台线程执行）
+    # ------------------------------------------------------------------
+
+    def init_gpt_sovits_model(self, callback: Callable[[bool, str], None]):
+        """在后台线程加载 GPT-SoVITS 模型。"""
+        if self._gpt_sovits is None:
+            callback(False, "GPT-SoVITS 引擎未安装")
+            return
+
+        def _load():
+            try:
+                self._gpt_sovits.init_model()
+                self.bridge.root.after(0, lambda: callback(True, "模型加载完成"))
+            except Exception as e:
+                _log.error("GPT-SoVITS 模型加载失败: %s", e, exc_info=True)
+                self.bridge.root.after(0, lambda: callback(False, str(e)))
+
+        threading.Thread(target=_load, daemon=True).start()
+
+    # ------------------------------------------------------------------
     # 本地预听
     # ------------------------------------------------------------------
 
@@ -239,6 +319,13 @@ class Orchestrator:
         if not text:
             callback(SpeakStatus.ERROR, "请输入文字")
             return
+
+        engine_key = self._get_engine_key()
+        if engine_key == "gpt-sovits" and self._gpt_sovits is not None:
+            ref_audio = self.config.get("gpt_sovits_ref_audio", "")
+            if not ref_audio:
+                callback(SpeakStatus.ERROR, "请先选择参考音频")
+                return
 
         voice = voice or self.config.get("voice")
         self._busy = True

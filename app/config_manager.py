@@ -16,6 +16,21 @@ _DEFAULTS = {
     "minimax_speed": 1.0,
     "minimax_vol": 1.0,
     "minimax_pitch": 0,
+    # Piper TTS 配置（本地离线引擎）
+    "piper_voice": "yanran",
+    "piper_quality": "high",
+    "piper_length_scale": 1.0,
+    "piper_noise_scale": 0.667,
+    "piper_noise_w": 0.8,
+    # GPT-SoVITS 配置（语音克隆引擎）
+    "gpt_sovits_ref_audio": "",
+    "gpt_sovits_prompt_text": "",
+    "gpt_sovits_prompt_lang": "zh",
+    "gpt_sovits_text_lang": "zh",
+    "gpt_sovits_top_k": 15,
+    "gpt_sovits_top_p": 0.8,
+    "gpt_sovits_temperature": 0.8,
+    "gpt_sovits_speed": 1.0,
     # 通用
     "play_on_speakers": False,
     "play_on_mic": True,
