@@ -11,7 +11,13 @@ dist/
 audio_cache/
 config/
 tts_debug.log
+debug.log
 nul
+
+# GPT-SoVITS（手动 clone）
+GPT-SoVITS/
+GPT_SoVITS/
+models/
 
 # 打包的源码压缩包
 *.zip
