@@ -4,7 +4,7 @@ import time
 from enum import Enum, auto
 from typing import Callable
 
-from app import SoundpadNotRunningError, TTSSoundpadError
+from app import SoundpadNotRunningError, TTSNetworkError, TTSSoundpadError
 from app.async_bridge import AsyncBridge
 from app.audio_player import AudioPlayer
 from app.config_manager import ConfigManager
@@ -56,8 +56,29 @@ class Orchestrator:
         self.history: list[HistoryItem] = []
         self._busy = False
         self._speak_gen = 0
+        self._request_seq = 0
         self._soundpad_lock = threading.Lock()
         self._history_lock = threading.Lock()
+
+    def _next_request_id(self) -> str:
+        self._request_seq += 1
+        return f"req-{self._request_seq:05d}"
+
+    def _set_status(self, callback: StatusCallback, status: SpeakStatus, message: str):
+        callback(status, message)
+
+    def _classify_error(self, exc: Exception) -> str:
+        msg = str(exc).strip()
+        lowered = msg.lower()
+        if isinstance(exc, SoundpadNotRunningError):
+            return "Soundpad 未运行，请先启动 Soundpad 并启用 Remote Control"
+        if isinstance(exc, TTSNetworkError) or any(
+            token in lowered for token in ("timeout", "timed out", "connect", "network")
+        ):
+            return "网络连接异常，请检查网络后重试"
+        if "401" in lowered or "403" in lowered or "api key" in lowered or "鉴权" in msg:
+            return "MiniMax 鉴权失败，请检查 API Key 权限后重试"
+        return msg or "发生未知错误，请查看日志排查"
 
     # ------------------------------------------------------------------
     # 引擎路由
@@ -105,9 +126,10 @@ class Orchestrator:
         gen = self._speak_gen
 
         voice = voice or self.config.get("voice")
+        request_id = self._next_request_id()
         self._busy = True
-        callback(SpeakStatus.GENERATING, "正在生成语音...")
-        _log.info("speak() gen=%d text=%r voice=%s", gen, text, voice)
+        self._set_status(callback, SpeakStatus.GENERATING, "正在生成语音...")
+        _log.info("request_id=%s speak() gen=%d text=%r voice=%s", request_id, gen, text, voice)
 
         engine = self._get_active_engine()
         params = self._build_engine_params()
@@ -115,68 +137,113 @@ class Orchestrator:
 
         self.bridge.submit(
             coro,
-            on_success=lambda fp: self._on_speak_generated(fp, text, voice, callback, gen),
-            on_error=lambda exc: self._on_speak_error(exc, callback, gen),
+            on_success=lambda fp: self._on_speak_generated(
+                fp, text, voice, callback, gen, request_id=request_id
+            ),
+            on_error=lambda exc: self._on_speak_error(exc, callback, gen, request_id=request_id),
         )
 
     def _on_speak_generated(
-        self, file_path: str, text: str, voice: str, callback: StatusCallback, gen: int
+        self,
+        file_path: str,
+        text: str,
+        voice: str,
+        callback: StatusCallback,
+        gen: int,
+        *,
+        request_id: str,
     ):
         """TTS 生成成功后，在后台线程发送到 Soundpad，避免阻塞 GUI。"""
         if gen != self._speak_gen:
-            _log.info("speak gen=%d 已过期 (当前=%d)，忽略", gen, self._speak_gen)
+            _log.info(
+                "request_id=%s speak gen=%d 已过期 (当前=%d)，忽略",
+                request_id,
+                gen,
+                self._speak_gen,
+            )
             return
-        _log.info("TTS 生成成功: %s", file_path)
-        callback(SpeakStatus.SENDING, "正在发送到 Soundpad...")
+        _log.info("request_id=%s TTS 生成成功: %s", request_id, file_path)
+        self._set_status(callback, SpeakStatus.SENDING, "正在发送到 Soundpad...")
 
         def _do_soundpad_io():
             with self._soundpad_lock:
                 try:
-                    new_index = self._send_to_soundpad(file_path)
+                    self._send_to_soundpad(file_path)
                     with self._history_lock:
                         self.history.insert(0, HistoryItem(text, voice, file_path))
                     self.config.add_recent_text(text)
-                    self.bridge.root.after(0, lambda: self._finish_speak(callback, True, gen=gen))
+                    self.bridge.root.after(
+                        0,
+                        lambda: self._finish_speak(callback, True, gen=gen, request_id=request_id),
+                    )
                 except SoundpadNotRunningError as e:
-                    _log.error("SoundpadNotRunningError: %s", e)
-                    msg = "Soundpad 未运行，请先启动 Soundpad"
-                    self.bridge.root.after(0, lambda: self._finish_speak(callback, False, msg, gen=gen))
+                    _log.error("request_id=%s SoundpadNotRunningError: %s", request_id, e)
+                    msg = self._classify_error(e)
+                    self.bridge.root.after(
+                        0,
+                        lambda: self._finish_speak(
+                            callback, False, msg, gen=gen, request_id=request_id
+                        ),
+                    )
                 except TTSSoundpadError as e:
-                    _log.error("TTSSoundpadError: %s", e)
-                    msg = str(e)
-                    self.bridge.root.after(0, lambda: self._finish_speak(callback, False, msg, gen=gen))
+                    _log.error("request_id=%s TTSSoundpadError: %s", request_id, e)
+                    msg = self._classify_error(e)
+                    self.bridge.root.after(
+                        0,
+                        lambda: self._finish_speak(
+                            callback, False, msg, gen=gen, request_id=request_id
+                        ),
+                    )
                 except Exception as e:
-                    _log.error("未知异常: %s", e, exc_info=True)
-                    msg = f"发送失败: {e}"
-                    self.bridge.root.after(0, lambda: self._finish_speak(callback, False, msg, gen=gen))
+                    _log.error("request_id=%s 未知异常: %s", request_id, e, exc_info=True)
+                    msg = self._classify_error(e)
+                    self.bridge.root.after(
+                        0,
+                        lambda: self._finish_speak(
+                            callback, False, msg, gen=gen, request_id=request_id
+                        ),
+                    )
 
         threading.Thread(target=_do_soundpad_io, daemon=True).start()
 
-    def _finish_speak(self, callback: StatusCallback, success: bool, error_msg: str = "", *, gen: int = 0):
+    def _finish_speak(
+        self,
+        callback: StatusCallback,
+        success: bool,
+        error_msg: str = "",
+        *,
+        gen: int = 0,
+        request_id: str = "req-unknown",
+    ):
         """在主线程上完成 speak 流程的最终回调。"""
         self._busy = False
         if gen != self._speak_gen:
-            _log.info("finish_speak gen=%d 已过期 (当前=%d)，忽略", gen, self._speak_gen)
+            _log.info(
+                "request_id=%s finish_speak gen=%d 已过期 (当前=%d)，忽略",
+                request_id,
+                gen,
+                self._speak_gen,
+            )
             return
         if success:
-            callback(SpeakStatus.PLAYING, "播放中")
+            self._set_status(callback, SpeakStatus.PLAYING, "播放中")
         else:
-            callback(SpeakStatus.ERROR, error_msg)
+            self._set_status(callback, SpeakStatus.ERROR, error_msg)
 
-    def _on_speak_error(self, exc: Exception, callback: StatusCallback, gen: int):
+    def _on_speak_error(
+        self, exc: Exception, callback: StatusCallback, gen: int, *, request_id: str
+    ):
         self._busy = False
         if gen != self._speak_gen:
             return
-        _log.error("TTS 生成失败: %s", exc, exc_info=True)
-        callback(SpeakStatus.ERROR, str(exc))
+        _log.error("request_id=%s TTS 生成失败: %s", request_id, exc, exc_info=True)
+        self._set_status(callback, SpeakStatus.ERROR, self._classify_error(exc))
 
     def _send_to_soundpad(self, file_path: str) -> int:
         speakers = self.config.get("play_on_speakers", False)
         mic = self.config.get("play_on_mic", True)
         _log.info("play_tts_file speakers=%s mic=%s", speakers, mic)
-        new_index = self.soundpad.play_tts_file(
-            file_path, speakers=speakers, mic=mic
-        )
+        new_index = self.soundpad.play_tts_file(file_path, speakers=speakers, mic=mic)
         _log.info("play_tts_file 成功 index=%d", new_index)
         return new_index
 
@@ -257,16 +324,16 @@ class Orchestrator:
     def _on_preview_generated(self, file_path: str, callback: StatusCallback):
         try:
             self.player.play(file_path)
-            callback(SpeakStatus.PLAYING, "本地预听中...")
+            self._set_status(callback, SpeakStatus.PLAYING, "本地预听中...")
         except Exception as e:
-            callback(SpeakStatus.ERROR, f"预听失败: {e}")
+            self._set_status(callback, SpeakStatus.ERROR, f"预听失败: {self._classify_error(e)}")
         finally:
             self._busy = False
 
     def _on_preview_error(self, exc: Exception, callback: StatusCallback):
         _log.error("预听 TTS 生成失败: %s", exc, exc_info=True)
         self._busy = False
-        callback(SpeakStatus.ERROR, str(exc))
+        self._set_status(callback, SpeakStatus.ERROR, self._classify_error(exc))
 
     def stop_preview(self):
         self.player.stop()

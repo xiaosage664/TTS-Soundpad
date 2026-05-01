@@ -20,19 +20,29 @@ _kernel32 = ctypes.windll.kernel32
 # 设置正确的函数签名，避免 64-bit 句柄截断问题 (Python 3.14+)
 _kernel32.CreateFileW.restype = ctypes.wintypes.HANDLE
 _kernel32.CreateFileW.argtypes = [
-    ctypes.wintypes.LPCWSTR, ctypes.wintypes.DWORD, ctypes.wintypes.DWORD,
-    ctypes.c_void_p, ctypes.wintypes.DWORD, ctypes.wintypes.DWORD,
+    ctypes.wintypes.LPCWSTR,
+    ctypes.wintypes.DWORD,
+    ctypes.wintypes.DWORD,
+    ctypes.c_void_p,
+    ctypes.wintypes.DWORD,
+    ctypes.wintypes.DWORD,
     ctypes.wintypes.HANDLE,
 ]
 _kernel32.WriteFile.restype = ctypes.wintypes.BOOL
 _kernel32.WriteFile.argtypes = [
-    ctypes.wintypes.HANDLE, ctypes.c_void_p, ctypes.wintypes.DWORD,
-    ctypes.POINTER(ctypes.wintypes.DWORD), ctypes.c_void_p,
+    ctypes.wintypes.HANDLE,
+    ctypes.c_void_p,
+    ctypes.wintypes.DWORD,
+    ctypes.POINTER(ctypes.wintypes.DWORD),
+    ctypes.c_void_p,
 ]
 _kernel32.ReadFile.restype = ctypes.wintypes.BOOL
 _kernel32.ReadFile.argtypes = [
-    ctypes.wintypes.HANDLE, ctypes.c_void_p, ctypes.wintypes.DWORD,
-    ctypes.POINTER(ctypes.wintypes.DWORD), ctypes.c_void_p,
+    ctypes.wintypes.HANDLE,
+    ctypes.c_void_p,
+    ctypes.wintypes.DWORD,
+    ctypes.POINTER(ctypes.wintypes.DWORD),
+    ctypes.c_void_p,
 ]
 _kernel32.CloseHandle.restype = ctypes.wintypes.BOOL
 _kernel32.CloseHandle.argtypes = [ctypes.wintypes.HANDLE]
@@ -41,7 +51,9 @@ _kernel32.WaitNamedPipeW.restype = ctypes.wintypes.BOOL
 _kernel32.WaitNamedPipeW.argtypes = [ctypes.wintypes.LPCWSTR, ctypes.wintypes.DWORD]
 _kernel32.GetShortPathNameW.restype = ctypes.wintypes.DWORD
 _kernel32.GetShortPathNameW.argtypes = [
-    ctypes.wintypes.LPCWSTR, ctypes.wintypes.LPWSTR, ctypes.wintypes.DWORD,
+    ctypes.wintypes.LPCWSTR,
+    ctypes.wintypes.LPWSTR,
+    ctypes.wintypes.DWORD,
 ]
 
 _INVALID_HANDLE = ctypes.wintypes.HANDLE(-1).value
@@ -77,11 +89,11 @@ def _send_raw(command: str) -> str:
         handle = _kernel32.CreateFileW(
             _PIPE_NAME,
             _GENERIC_READ | _GENERIC_WRITE,
-            0,       # no sharing
-            None,    # default security
+            0,  # no sharing
+            None,  # default security
             _OPEN_EXISTING,
-            0,       # default attributes
-            None,    # no template
+            0,  # default attributes
+            None,  # no template
         )
         if handle != _INVALID_HANDLE:
             break  # 连接成功
@@ -94,9 +106,7 @@ def _send_raw(command: str) -> str:
         else:
             break  # 非 PIPE_BUSY 错误，不重试
     else:
-        raise SoundpadNotRunningError(
-            "Soundpad 管道忙，可能有其他程序正在占用连接，请稍后重试"
-        )
+        raise SoundpadNotRunningError("Soundpad 管道忙，可能有其他程序正在占用连接，请稍后重试")
 
     if handle == _INVALID_HANDLE:
         if last_err == 2:
@@ -112,9 +122,7 @@ def _send_raw(command: str) -> str:
     try:
         data = (command + "\r\n").encode("utf-8")
         bytes_written = ctypes.wintypes.DWORD(0)
-        success = _kernel32.WriteFile(
-            handle, data, len(data), ctypes.byref(bytes_written), None
-        )
+        success = _kernel32.WriteFile(handle, data, len(data), ctypes.byref(bytes_written), None)
         if not success:
             err = _kernel32.GetLastError()
             _log.error("WriteFile 失败 err=%d", err)
@@ -122,9 +130,7 @@ def _send_raw(command: str) -> str:
 
         buf = ctypes.create_string_buffer(4096)
         bytes_read = ctypes.wintypes.DWORD(0)
-        success = _kernel32.ReadFile(
-            handle, buf, 4096, ctypes.byref(bytes_read), None
-        )
+        success = _kernel32.ReadFile(handle, buf, 4096, ctypes.byref(bytes_read), None)
         if not success:
             err = _kernel32.GetLastError()
             _log.error("ReadFile 失败 err=%d", err)
@@ -269,7 +275,7 @@ class SoundpadController:
             count_after = self.get_sound_count()
             if count_after >= new_index:
                 new_index = count_after
-                _log.info("  更新完成 count=%d index=%d wait=%dms", count_after, new_index, i*100)
+                _log.info("  更新完成 count=%d index=%d wait=%dms", count_after, new_index, i * 100)
                 break
             time.sleep(0.1)
         else:

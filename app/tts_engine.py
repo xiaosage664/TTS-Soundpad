@@ -8,17 +8,18 @@ from app import TTSGenerationError, TTSNetworkError
 from app.audio_cache import cache_path_for, make_cache_key, try_cache
 
 _log = logging.getLogger("tts_engine")
+_MAX_SYNTH_RETRIES = 3
 
 # zh-CN 语音中文友好名映射（API 返回的 LocalName 为空）
 _FRIENDLY_NAMES: dict[str, str] = {
-    "zh-CN-XiaoxiaoNeural":           "晓晓 (女声·温柔)",
-    "zh-CN-XiaoyiNeural":             "晓伊 (女声·活泼)",
-    "zh-CN-YunjianNeural":            "云健 (男声·沉稳)",
-    "zh-CN-YunxiNeural":              "云希 (男声·年轻)",
-    "zh-CN-YunxiaNeural":             "云夏 (男声·少年)",
-    "zh-CN-YunyangNeural":            "云扬 (男声·新闻)",
-    "zh-CN-liaoning-XiaobeiNeural":   "晓北 (女声·东北话)",
-    "zh-CN-shaanxi-XiaoniNeural":     "晓妮 (女声·陕西话)",
+    "zh-CN-XiaoxiaoNeural": "晓晓 (女声·温柔)",
+    "zh-CN-XiaoyiNeural": "晓伊 (女声·活泼)",
+    "zh-CN-YunjianNeural": "云健 (男声·沉稳)",
+    "zh-CN-YunxiNeural": "云希 (男声·年轻)",
+    "zh-CN-YunxiaNeural": "云夏 (男声·少年)",
+    "zh-CN-YunyangNeural": "云扬 (男声·新闻)",
+    "zh-CN-liaoning-XiaobeiNeural": "晓北 (女声·东北话)",
+    "zh-CN-shaanxi-XiaoniNeural": "晓妮 (女声·陕西话)",
 }
 
 # 中文语音预设 (离线 fallback)
@@ -56,14 +57,38 @@ class TTSEngine:
 
         output_path = cache_path_for(self._cache_dir, key, "edge")
 
-        try:
-            communicate = edge_tts.Communicate(text, voice, rate=rate, pitch=pitch)
-            await asyncio.wait_for(communicate.save(str(output_path)), timeout=30)
-        except Exception as e:
-            err_msg = str(e).lower()
-            if "connect" in err_msg or "timeout" in err_msg or "network" in err_msg:
+        last_error: Exception | None = None
+        for attempt in range(1, _MAX_SYNTH_RETRIES + 1):
+            try:
+                communicate = edge_tts.Communicate(text, voice, rate=rate, pitch=pitch)
+                await asyncio.wait_for(communicate.save(str(output_path)), timeout=30)
+                break
+            except Exception as e:
+                last_error = e
+                err_msg = str(e).lower()
+                is_network_error = (
+                    isinstance(e, asyncio.TimeoutError)
+                    or "connect" in err_msg
+                    or "timeout" in err_msg
+                    or "network" in err_msg
+                )
+                if not is_network_error:
+                    raise TTSGenerationError(f"语音生成失败: {e}") from e
+                if attempt < _MAX_SYNTH_RETRIES:
+                    backoff = 0.6 * attempt
+                    _log.warning(
+                        "Edge TTS 网络异常，准备重试 attempt=%d/%d backoff=%.1fs err=%s",
+                        attempt,
+                        _MAX_SYNTH_RETRIES,
+                        backoff,
+                        e,
+                    )
+                    await asyncio.sleep(backoff)
+                    continue
                 raise TTSNetworkError(f"网络连接失败: {e}") from e
-            raise TTSGenerationError(f"语音生成失败: {e}") from e
+
+        if last_error and not output_path.exists():
+            raise TTSGenerationError(f"语音生成失败: {last_error}") from last_error
 
         if not output_path.exists() or output_path.stat().st_size == 0:
             raise TTSGenerationError("语音文件生成失败 (文件为空)")
@@ -84,11 +109,13 @@ class TTSEngine:
                 if v.get("Locale", "").startswith("zh-CN"):
                     short = v["ShortName"]
                     friendly = _FRIENDLY_NAMES.get(short) or v.get("LocalName") or short
-                    chinese_voices.append({
-                        "name": short,
-                        "friendly_name": friendly,
-                        "gender": v.get("Gender", "Unknown"),
-                    })
+                    chinese_voices.append(
+                        {
+                            "name": short,
+                            "friendly_name": friendly,
+                            "gender": v.get("Gender", "Unknown"),
+                        }
+                    )
             if chinese_voices:
                 self._voices_cache = chinese_voices
                 return chinese_voices

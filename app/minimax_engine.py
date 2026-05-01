@@ -10,13 +10,27 @@ from app import TTSGenerationError, TTSNetworkError
 from app.audio_cache import cache_path_for, make_cache_key, try_cache
 
 _log = logging.getLogger("minimax_engine")
+_REQUEST_TIMEOUT_SECONDS = 30
+_MAX_HTTP_RETRIES = 3
 
 # MiniMax 系统预设音色（API 获取失败时的兜底，基于 Speech 2.8 文档）
 _PRESET_VOICES = [
-    {"name": "Chinese (Mandarin)_Reliable_Executive", "friendly_name": "沉稳高管 (男声)", "gender": "Male"},
-    {"name": "Chinese (Mandarin)_News_Anchor", "friendly_name": "新闻女声 (女声)", "gender": "Female"},
+    {
+        "name": "Chinese (Mandarin)_Reliable_Executive",
+        "friendly_name": "沉稳高管 (男声)",
+        "gender": "Male",
+    },
+    {
+        "name": "Chinese (Mandarin)_News_Anchor",
+        "friendly_name": "新闻女声 (女声)",
+        "gender": "Female",
+    },
     {"name": "Chinese (Mandarin)_Lyrical_Voice", "friendly_name": "抒情女声", "gender": "Female"},
-    {"name": "Chinese (Mandarin)_HK_Flight_Attendant", "friendly_name": "港普空乘 (女声)", "gender": "Female"},
+    {
+        "name": "Chinese (Mandarin)_HK_Flight_Attendant",
+        "friendly_name": "港普空乘 (女声)",
+        "gender": "Female",
+    },
     {"name": "male-qn-qingse", "friendly_name": "青涩 (青年男声)", "gender": "Male"},
     {"name": "female-shaonv", "friendly_name": "少女 (甜美少女)", "gender": "Female"},
     {"name": "English_Graceful_Lady", "friendly_name": "优雅女士 (英文)", "gender": "Female"},
@@ -123,24 +137,14 @@ class MiniMaxEngine:
 
         _log.info(
             "MiniMax TTS text=%r voice=%s speed=%s vol=%s pitch=%s",
-            text[:50], voice, speed, vol, pitch,
+            text[:50],
+            voice,
+            speed,
+            vol,
+            pitch,
         )
 
-        try:
-            async with aiohttp.ClientSession(timeout=ClientTimeout(total=30)) as session:
-                async with session.post(url, headers=headers, json=payload) as resp:
-                    if resp.status != 200:
-                        body = await resp.text()
-                        raise TTSGenerationError(
-                            f"MiniMax API 返回 {resp.status}: {body[:200]}"
-                        )
-                    data = await resp.json()
-        except aiohttp.ClientError as e:
-            raise TTSNetworkError(f"MiniMax 网络请求失败: {e}") from e
-        except TTSGenerationError:
-            raise
-        except Exception as e:
-            raise TTSGenerationError(f"MiniMax 请求异常: {e}") from e
+        data = await self._post_json_with_retry(url, headers, payload)
 
         # 检查业务状态码
         base_resp = data.get("base_resp", {})
@@ -192,10 +196,10 @@ class MiniMaxEngine:
         }
         payload = {"voice_type": "system"}
         try:
-            async with aiohttp.ClientSession(timeout=ClientTimeout(total=30)) as session:
-                async with session.post(
-                    url, headers=headers, json=payload
-                ) as resp:
+            async with aiohttp.ClientSession(
+                timeout=ClientTimeout(total=_REQUEST_TIMEOUT_SECONDS)
+            ) as session:
+                async with session.post(url, headers=headers, json=payload) as resp:
                     if resp.status != 200:
                         _log.warning("获取音色列表失败 HTTP %d", resp.status)
                         return []
@@ -212,12 +216,58 @@ class MiniMaxEngine:
             voice_id = v.get("voice_id", "")
             # voice_name 为空时用 voice_id 截取后半部分
             friendly = v.get("voice_name", "") or voice_id.rsplit("_", 1)[-1]
-            voices.append({
-                "name": voice_id,
-                "friendly_name": f"{friendly} ({voice_id[:20]}...)",
-                "gender": "Unknown",
-            })
+            voices.append(
+                {
+                    "name": voice_id,
+                    "friendly_name": f"{friendly} ({voice_id[:20]}...)",
+                    "gender": "Unknown",
+                }
+            )
         return voices
+
+    async def _post_json_with_retry(self, url: str, headers: dict, payload: dict) -> dict:
+        last_error: Exception | None = None
+        for attempt in range(1, _MAX_HTTP_RETRIES + 1):
+            try:
+                async with aiohttp.ClientSession(
+                    timeout=ClientTimeout(total=_REQUEST_TIMEOUT_SECONDS)
+                ) as session:
+                    async with session.post(url, headers=headers, json=payload) as resp:
+                        if resp.status in (401, 403):
+                            body = await resp.text()
+                            raise TTSGenerationError(
+                                f"MiniMax 鉴权失败 HTTP {resp.status}: {body[:200]}"
+                            )
+                        if resp.status >= 500:
+                            body = await resp.text()
+                            raise TTSNetworkError(
+                                f"MiniMax 服务暂不可用 HTTP {resp.status}: {body[:120]}"
+                            )
+                        if resp.status != 200:
+                            body = await resp.text()
+                            raise TTSGenerationError(
+                                f"MiniMax API 返回 {resp.status}: {body[:200]}"
+                            )
+                        return await resp.json()
+            except TTSGenerationError:
+                raise
+            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                last_error = e
+                if attempt < _MAX_HTTP_RETRIES:
+                    backoff = 0.6 * attempt
+                    _log.warning(
+                        "MiniMax 网络异常，准备重试 attempt=%d/%d backoff=%.1fs err=%s",
+                        attempt,
+                        _MAX_HTTP_RETRIES,
+                        backoff,
+                        e,
+                    )
+                    await asyncio.sleep(backoff)
+                    continue
+                raise TTSNetworkError(f"MiniMax 网络请求失败: {e}") from e
+            except Exception as e:
+                raise TTSGenerationError(f"MiniMax 请求异常: {e}") from e
+        raise TTSNetworkError(f"MiniMax 网络请求失败: {last_error}")
 
     # ------------------------------------------------------------------
     # API Key 验证

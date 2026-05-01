@@ -18,19 +18,29 @@ class RatePitchControl(ctk.CTkFrame):
         rate_row.pack(fill="x", pady=(4, 2))
 
         ctk.CTkLabel(
-            rate_row, text="语速:", font=FONTS["small"],
-            text_color=COLORS["text_secondary"], width=35,
+            rate_row,
+            text="语速:",
+            font=FONTS["small"],
+            text_color=COLORS["text_secondary"],
+            width=35,
         ).pack(side="left")
 
         self._rate_label = ctk.CTkLabel(
-            rate_row, text="+0%", font=FONTS["small"],
-            text_color=COLORS["accent"], width=45,
+            rate_row,
+            text="+0%",
+            font=FONTS["small"],
+            text_color=COLORS["accent"],
+            width=45,
         )
         self._rate_label.pack(side="right", padx=(4, 0))
 
         self._rate_slider = ctk.CTkSlider(
-            rate_row, from_=-50, to=100, number_of_steps=30,
-            width=200, height=18,
+            rate_row,
+            from_=-50,
+            to=100,
+            number_of_steps=30,
+            width=200,
+            height=18,
             fg_color=COLORS["accent_dim"],
             progress_color=COLORS["accent"],
             button_color=COLORS["accent"],
@@ -45,19 +55,29 @@ class RatePitchControl(ctk.CTkFrame):
         pitch_row.pack(fill="x", pady=(2, 4))
 
         ctk.CTkLabel(
-            pitch_row, text="音调:", font=FONTS["small"],
-            text_color=COLORS["text_secondary"], width=35,
+            pitch_row,
+            text="音调:",
+            font=FONTS["small"],
+            text_color=COLORS["text_secondary"],
+            width=35,
         ).pack(side="left")
 
         self._pitch_label = ctk.CTkLabel(
-            pitch_row, text="+0Hz", font=FONTS["small"],
-            text_color=COLORS["accent"], width=45,
+            pitch_row,
+            text="+0Hz",
+            font=FONTS["small"],
+            text_color=COLORS["accent"],
+            width=45,
         )
         self._pitch_label.pack(side="right", padx=(4, 0))
 
         self._pitch_slider = ctk.CTkSlider(
-            pitch_row, from_=-50, to=50, number_of_steps=20,
-            width=200, height=18,
+            pitch_row,
+            from_=-50,
+            to=50,
+            number_of_steps=20,
+            width=200,
+            height=18,
             fg_color=COLORS["accent_dim"],
             progress_color=COLORS["accent"],
             button_color=COLORS["accent"],
@@ -114,11 +134,15 @@ class QuickPhrasePanel(ctk.CTkFrame):
         header = ctk.CTkFrame(self, fg_color="transparent")
         header.pack(fill="x", padx=12, pady=(8, 2))
         ctk.CTkLabel(
-            header, text="快捷短语", font=FONTS["subtitle"],
+            header,
+            text="快捷短语",
+            font=FONTS["subtitle"],
             text_color=COLORS["text_primary"],
         ).pack(side="left")
         ctk.CTkLabel(
-            header, text="右键删除", font=FONTS["small"],
+            header,
+            text="右键删除",
+            font=FONTS["small"],
             text_color=COLORS["text_dim"],
         ).pack(side="right")
 
@@ -137,14 +161,17 @@ class QuickPhrasePanel(ctk.CTkFrame):
             w.destroy()
 
         # 限制最多 MAX_PHRASES 条
-        phrases = phrases[:self.MAX_PHRASES]
+        phrases = phrases[: self.MAX_PHRASES]
 
         cols = 4  # 每行最多4个按钮
         for i, phrase in enumerate(phrases):
             r, c = divmod(i, cols)
             btn = ctk.CTkButton(
-                self._flow_frame, text=phrase, height=28,
-                font=FONTS["small"], corner_radius=14,
+                self._flow_frame,
+                text=phrase,
+                height=28,
+                font=FONTS["small"],
+                corner_radius=14,
                 fg_color=COLORS["bg_secondary"],
                 hover_color=COLORS["accent"],
                 text_color=COLORS["text_primary"],
@@ -159,8 +186,12 @@ class QuickPhrasePanel(ctk.CTkFrame):
             idx = len(phrases)
             r, c = divmod(idx, cols)
             self._add_btn = ctk.CTkButton(
-                self._flow_frame, text="+", width=30, height=28,
-                font=FONTS["body"], corner_radius=14,
+                self._flow_frame,
+                text="+",
+                width=30,
+                height=28,
+                font=FONTS["body"],
+                corner_radius=14,
                 fg_color=COLORS["border"],
                 hover_color=COLORS["accent"],
                 text_color=COLORS["text_dim"],
@@ -200,7 +231,9 @@ class HistoryPanel(ctk.CTkScrollableFrame):
             self._header = ctk.CTkFrame(self, fg_color="transparent")
             self._header.pack(fill="x", padx=4, pady=(2, 0))
             ctk.CTkLabel(
-                self._header, text="历史记录", font=FONTS["subtitle"],
+                self._header,
+                text="历史记录",
+                font=FONTS["subtitle"],
                 text_color=COLORS["text_primary"],
             ).pack(side="left")
 
@@ -216,36 +249,51 @@ class HistoryPanel(ctk.CTkScrollableFrame):
 
         # 左边 accent 装饰线
         accent_bar = ctk.CTkFrame(
-            row, width=3, fg_color=COLORS["accent"], corner_radius=1,
+            row,
+            width=3,
+            fg_color=COLORS["accent"],
+            corner_radius=1,
         )
         accent_bar.pack(side="left", fill="y")
 
         # 时间戳
         ctk.CTkLabel(
-            row, text=timestamp, font=("Consolas", 10),
+            row,
+            text=timestamp,
+            font=("Consolas", 10),
             text_color=COLORS["text_dim"],
         ).pack(side="left", padx=(6, 4))
 
         # 文本
         display = text if len(text) <= 26 else text[:24] + "..."
         ctk.CTkLabel(
-            row, text=display, font=("Microsoft YaHei UI", 10),
-            text_color=COLORS["text_primary"], anchor="w",
+            row,
+            text=display,
+            font=("Microsoft YaHei UI", 10),
+            text_color=COLORS["text_primary"],
+            anchor="w",
         ).pack(side="left", fill="x", expand=True, padx=4)
 
         # 语音标签
         voice_short = voice.split("-")[-1].replace("Neural", "") if voice else ""
         if voice_short:
             ctk.CTkLabel(
-                row, text=voice_short, font=("Microsoft YaHei UI", 9),
+                row,
+                text=voice_short,
+                font=("Microsoft YaHei UI", 9),
                 text_color=COLORS["text_dim"],
             ).pack(side="left", padx=2)
 
         # 重播按钮
         btn = ctk.CTkButton(
-            row, text="\u25b6", width=24, height=22,
-            font=("Microsoft YaHei UI", 9), corner_radius=4,
-            fg_color=COLORS["accent"], hover_color=COLORS["accent_hover"],
+            row,
+            text="\u25b6",
+            width=24,
+            height=22,
+            font=("Microsoft YaHei UI", 9),
+            corner_radius=4,
+            fg_color=COLORS["accent"],
+            hover_color=COLORS["accent_hover"],
             command=lambda t=text, v=voice: self._replay(t, v),
         )
         btn.pack(side="right", padx=(2, 4))
@@ -268,19 +316,26 @@ class StatusBar(ctk.CTkFrame):
         self.pack_propagate(False)
 
         self._dot = ctk.CTkLabel(
-            self, text="\u25cf", font=("Arial", 10),
-            text_color=COLORS["error"], width=16,
+            self,
+            text="\u25cf",
+            font=("Arial", 10),
+            text_color=COLORS["error"],
+            width=16,
         )
         self._dot.pack(side="left", padx=(10, 0))
 
         self._conn_label = ctk.CTkLabel(
-            self, text="Soundpad 未连接", font=FONTS["small"],
+            self,
+            text="Soundpad 未连接",
+            font=FONTS["small"],
             text_color=COLORS["text_dim"],
         )
         self._conn_label.pack(side="left", padx=4)
 
         self._status_label = ctk.CTkLabel(
-            self, text="", font=FONTS["small"],
+            self,
+            text="",
+            font=FONTS["small"],
             text_color=COLORS["text_secondary"],
         )
         self._status_label.pack(side="right", padx=10)

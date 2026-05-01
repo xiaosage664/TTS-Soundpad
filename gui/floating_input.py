@@ -72,7 +72,7 @@ class FloatingInputWindow(ctk.CTkToplevel):
         # 拖拽指示器
         self._drag_handle = ctk.CTkLabel(
             self._outer,
-            text="\u28FF",  # ⠿
+            text="\u28ff",  # ⠿
             font=("Arial", 16),
             text_color=COLORS["text_dim"],
             width=22,
@@ -195,7 +195,7 @@ class FloatingInputWindow(ctk.CTkToplevel):
         img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
         d = ImageDraw.Draw(img)
         c = color.lstrip("#")
-        rgb = tuple(int(c[i:i + 2], 16) for i in (0, 2, 4))
+        rgb = tuple(int(c[i : i + 2], 16) for i in (0, 2, 4))
         fill = (*rgb, 255)
         # 钉帽（扁椭圆，顶部偏右倾斜感）
         d.ellipse([3, 0, size - 2, int(size * 0.45)], fill=fill)
@@ -203,15 +203,24 @@ class FloatingInputWindow(ctk.CTkToplevel):
         mid = size // 2
         body_top = int(size * 0.38)
         body_bot = int(size * 0.65)
-        d.polygon([
-            (mid - 3, body_top), (mid + 3, body_top),
-            (mid + 2, body_bot), (mid - 2, body_bot),
-        ], fill=fill)
+        d.polygon(
+            [
+                (mid - 3, body_top),
+                (mid + 3, body_top),
+                (mid + 2, body_bot),
+                (mid - 2, body_bot),
+            ],
+            fill=fill,
+        )
         # 针尖（三角）
-        d.polygon([
-            (mid - 1, body_bot), (mid + 1, body_bot),
-            (mid, size - 1),
-        ], fill=fill)
+        d.polygon(
+            [
+                (mid - 1, body_bot),
+                (mid + 1, body_bot),
+                (mid, size - 1),
+            ],
+            fill=fill,
+        )
         return ctk.CTkImage(light_image=img, dark_image=img, size=(size, size))
 
     def _toggle_topmost(self):

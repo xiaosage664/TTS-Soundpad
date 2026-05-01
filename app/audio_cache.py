@@ -3,9 +3,7 @@ from pathlib import Path
 
 
 def make_cache_key(engine: str, text: str, voice: str, **params) -> str:
-    raw = f"{engine}|{text}|{voice}|" + "|".join(
-        f"{k}={v}" for k, v in sorted(params.items())
-    )
+    raw = f"{engine}|{text}|{voice}|" + "|".join(f"{k}={v}" for k, v in sorted(params.items()))
     return hashlib.md5(raw.encode("utf-8")).hexdigest()
 
 

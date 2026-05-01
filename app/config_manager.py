@@ -2,6 +2,8 @@ import json
 import threading
 from pathlib import Path
 
+from app.secret_store import delete_secret, load_secret, save_secret
+
 _DEFAULTS = {
     # 引擎选择
     "engine": "edge",
@@ -34,6 +36,7 @@ _DEBOUNCE_MS = 500  # 防抖延迟（毫秒）
 
 class ConfigManager:
     def __init__(self, config_dir: Path):
+        self._config_dir = config_dir
         self._path = config_dir / "settings.json"
         self._data: dict = {}
         self._save_timer: threading.Timer | None = None
@@ -50,6 +53,20 @@ class ConfigManager:
         # 用默认值填充缺失的 key
         for key, default in _DEFAULTS.items():
             self._data.setdefault(key, default)
+        self._load_minimax_key()
+
+    def _load_minimax_key(self):
+        """优先从安全存储读取密钥，并兼容旧版 settings.json 明文字段迁移。"""
+        secret_key = load_secret(self._config_dir, "minimax_api_key")
+        if secret_key:
+            self._data["minimax_api_key"] = secret_key
+            return
+        legacy_key = self._data.get("minimax_api_key", "")
+        if legacy_key:
+            save_secret(self._config_dir, "minimax_api_key", legacy_key)
+            self._data["minimax_api_key"] = legacy_key
+            # 明文字段迁移后立即清空并落盘，避免继续以明文保存
+            self._do_save()
 
     def save(self):
         """立即写入磁盘（取消挂起的 debounce）。"""
@@ -58,7 +75,9 @@ class ConfigManager:
 
     def _do_save(self):
         with self._lock:
-            snapshot = json.dumps(self._data, ensure_ascii=False, indent=2)
+            persisted = dict(self._data)
+            persisted["minimax_api_key"] = ""
+            snapshot = json.dumps(persisted, ensure_ascii=False, indent=2)
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._path.write_text(snapshot, encoding="utf-8")
 
@@ -79,6 +98,11 @@ class ConfigManager:
 
     def set(self, key: str, value):
         self._data[key] = value
+        if key == "minimax_api_key":
+            if value:
+                save_secret(self._config_dir, "minimax_api_key", value)
+            else:
+                delete_secret(self._config_dir, "minimax_api_key")
         self._schedule_save()
 
     def add_recent_text(self, text: str):

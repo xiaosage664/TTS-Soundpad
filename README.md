@@ -61,7 +61,7 @@ MiniMax 提供更丰富、更自然的音色，适合追求高品质语音的用
 4. 在 **语音** 下拉框选择喜欢的音色
 5. 调节**语速**（0.5~2.0）、**音量**（0~10）、**音调**（-12~+12）
 
-> 💡 **提示：** API Key 会自动保存在 `config/settings.json` 中，下次启动无需重新输入。建议在游戏外先验证和试听，找到最佳参数组合。
+> 💡 **提示：** API Key 会通过本地加密存储（DPAPI）保存，下次启动无需重新输入。建议在游戏外先验证和试听，找到最佳参数组合。
 
 #### 费用说明
 
@@ -105,6 +105,29 @@ pyinstaller TTS_Soundpad.spec
 ```
 
 生成的可执行文件位于 `dist/TTS_Soundpad.exe`。
+
+## 开发与质量检查
+
+```bash
+# 安装依赖
+pip install -r requirements.txt
+
+# 运行测试
+python -m pytest -q
+
+# 代码检查
+python -m ruff check app gui tests main.py
+python -m black --check app gui tests main.py
+
+# 本地自动化提交检查（首次）
+python -m pre_commit install
+python -m pre_commit run --all-files
+```
+
+## 故障排查与发布
+
+- 常见问题排查：[`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md)
+- 发布前检查清单：[`docs/RELEASE_CHECKLIST.md`](docs/RELEASE_CHECKLIST.md)
 
 ## 许可证
 

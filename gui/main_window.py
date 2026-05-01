@@ -69,8 +69,11 @@ class MainWindow:
         engine_row.pack(fill="x", padx=12, pady=(10, 4))
 
         ctk.CTkLabel(
-            engine_row, text="引擎:", font=FONTS["body"],
-            text_color=COLORS["text_secondary"], width=40,
+            engine_row,
+            text="引擎:",
+            font=FONTS["body"],
+            text_color=COLORS["text_secondary"],
+            width=40,
         ).pack(side="left")
 
         self._engine_selector = ctk.CTkSegmentedButton(
@@ -89,14 +92,21 @@ class MainWindow:
         voice_row.pack(fill="x", padx=12, pady=(4, 0))
 
         ctk.CTkLabel(
-            voice_row, text="语音:", font=FONTS["body"],
-            text_color=COLORS["text_secondary"], width=40,
+            voice_row,
+            text="语音:",
+            font=FONTS["body"],
+            text_color=COLORS["text_secondary"],
+            width=40,
         ).pack(side="left")
 
         self._voice_combo = ctk.CTkComboBox(
-            voice_row, variable=self._voice_var, state="readonly",
-            values=["加载中..."], font=FONTS["body"],
-            dropdown_font=FONTS["body"], width=240,
+            voice_row,
+            variable=self._voice_var,
+            state="readonly",
+            values=["加载中..."],
+            font=FONTS["body"],
+            dropdown_font=FONTS["body"],
+            width=240,
         )
         self._voice_combo.pack(side="left", fill="x", expand=True, padx=(8, 0))
 
@@ -105,7 +115,8 @@ class MainWindow:
         self._edge_frame.pack(fill="x", padx=12, pady=(4, 0))
 
         self._rate_pitch = RatePitchControl(
-            self._edge_frame, on_change=self._on_rate_pitch_change,
+            self._edge_frame,
+            on_change=self._on_rate_pitch_change,
         )
         self._rate_pitch.pack(fill="x")
         self._rate_pitch.set_rate(self._orch.config.get("rate", "+0%"))
@@ -118,19 +129,28 @@ class MainWindow:
         api_row = ctk.CTkFrame(self._minimax_frame, fg_color="transparent")
         api_row.pack(fill="x", pady=(4, 2))
         ctk.CTkLabel(
-            api_row, text="API Key:", font=FONTS["small"],
-            text_color=COLORS["text_secondary"], width=55,
+            api_row,
+            text="API Key:",
+            font=FONTS["small"],
+            text_color=COLORS["text_secondary"],
+            width=55,
         ).pack(side="left")
         self._minimax_api_entry = ctk.CTkEntry(
-            api_row, font=FONTS["small"],
+            api_row,
+            font=FONTS["small"],
             placeholder_text="输入 MiniMax API Key",
-            show="*", height=28,
+            show="*",
+            height=28,
         )
         self._minimax_api_entry.pack(side="left", fill="x", expand=True, padx=(4, 0))
         self._minimax_verify_btn = ctk.CTkButton(
-            api_row, text="验证", font=FONTS["small"],
-            width=50, height=28,
-            fg_color=COLORS["accent"], hover_color=COLORS["accent_hover"],
+            api_row,
+            text="验证",
+            font=FONTS["small"],
+            width=50,
+            height=28,
+            fg_color=COLORS["accent"],
+            hover_color=COLORS["accent_hover"],
             command=self._on_verify_minimax_key,
         )
         self._minimax_verify_btn.pack(side="left", padx=(4, 0))
@@ -143,17 +163,27 @@ class MainWindow:
         speed_row = ctk.CTkFrame(self._minimax_frame, fg_color="transparent")
         speed_row.pack(fill="x", pady=2)
         ctk.CTkLabel(
-            speed_row, text="语速:", font=FONTS["small"],
-            text_color=COLORS["text_secondary"], width=55,
+            speed_row,
+            text="语速:",
+            font=FONTS["small"],
+            text_color=COLORS["text_secondary"],
+            width=55,
         ).pack(side="left")
         self._mm_speed_label = ctk.CTkLabel(
-            speed_row, text=f'{self._orch.config.get("minimax_speed", 1.0):.1f}',
-            font=FONTS["small"], text_color=COLORS["accent"], width=35,
+            speed_row,
+            text=f'{self._orch.config.get("minimax_speed", 1.0):.1f}',
+            font=FONTS["small"],
+            text_color=COLORS["accent"],
+            width=35,
         )
         self._mm_speed_label.pack(side="right", padx=(4, 0))
         self._mm_speed_slider = ctk.CTkSlider(
-            speed_row, from_=0.5, to=2.0, number_of_steps=15,
-            width=200, height=16,
+            speed_row,
+            from_=0.5,
+            to=2.0,
+            number_of_steps=15,
+            width=200,
+            height=16,
             fg_color=COLORS["accent_dim"],
             progress_color=COLORS["accent"],
             button_color=COLORS["accent"],
@@ -167,17 +197,27 @@ class MainWindow:
         vol_row = ctk.CTkFrame(self._minimax_frame, fg_color="transparent")
         vol_row.pack(fill="x", pady=2)
         ctk.CTkLabel(
-            vol_row, text="音量:", font=FONTS["small"],
-            text_color=COLORS["text_secondary"], width=55,
+            vol_row,
+            text="音量:",
+            font=FONTS["small"],
+            text_color=COLORS["text_secondary"],
+            width=55,
         ).pack(side="left")
         self._mm_vol_label = ctk.CTkLabel(
-            vol_row, text=f'{self._orch.config.get("minimax_vol", 1.0):.1f}',
-            font=FONTS["small"], text_color=COLORS["accent"], width=35,
+            vol_row,
+            text=f'{self._orch.config.get("minimax_vol", 1.0):.1f}',
+            font=FONTS["small"],
+            text_color=COLORS["accent"],
+            width=35,
         )
         self._mm_vol_label.pack(side="right", padx=(4, 0))
         self._mm_vol_slider = ctk.CTkSlider(
-            vol_row, from_=0, to=10, number_of_steps=20,
-            width=200, height=16,
+            vol_row,
+            from_=0,
+            to=10,
+            number_of_steps=20,
+            width=200,
+            height=16,
             fg_color=COLORS["accent_dim"],
             progress_color=COLORS["accent"],
             button_color=COLORS["accent"],
@@ -191,17 +231,27 @@ class MainWindow:
         pitch_row = ctk.CTkFrame(self._minimax_frame, fg_color="transparent")
         pitch_row.pack(fill="x", pady=2)
         ctk.CTkLabel(
-            pitch_row, text="音调:", font=FONTS["small"],
-            text_color=COLORS["text_secondary"], width=55,
+            pitch_row,
+            text="音调:",
+            font=FONTS["small"],
+            text_color=COLORS["text_secondary"],
+            width=55,
         ).pack(side="left")
         self._mm_pitch_label = ctk.CTkLabel(
-            pitch_row, text=f'{self._orch.config.get("minimax_pitch", 0):+d}',
-            font=FONTS["small"], text_color=COLORS["accent"], width=35,
+            pitch_row,
+            text=f'{self._orch.config.get("minimax_pitch", 0):+d}',
+            font=FONTS["small"],
+            text_color=COLORS["accent"],
+            width=35,
         )
         self._mm_pitch_label.pack(side="right", padx=(4, 0))
         self._mm_pitch_slider = ctk.CTkSlider(
-            pitch_row, from_=-12, to=12, number_of_steps=24,
-            width=200, height=16,
+            pitch_row,
+            from_=-12,
+            to=12,
+            number_of_steps=24,
+            width=200,
+            height=16,
             fg_color=COLORS["accent_dim"],
             progress_color=COLORS["accent"],
             button_color=COLORS["accent"],
@@ -216,24 +266,29 @@ class MainWindow:
         output_row.pack(fill="x", padx=12, pady=(2, 10))
 
         ctk.CTkLabel(
-            output_row, text="输出:", font=FONTS["body"],
-            text_color=COLORS["text_secondary"], width=40,
+            output_row,
+            text="输出:",
+            font=FONTS["body"],
+            text_color=COLORS["text_secondary"],
+            width=40,
         ).pack(side="left")
 
-        self._mic_var = ctk.BooleanVar(
-            value=self._orch.config.get("play_on_mic", True)
-        )
+        self._mic_var = ctk.BooleanVar(value=self._orch.config.get("play_on_mic", True))
         ctk.CTkCheckBox(
-            output_row, text="麦克风", variable=self._mic_var,
-            font=FONTS["body"], command=self._save_output_config,
+            output_row,
+            text="麦克风",
+            variable=self._mic_var,
+            font=FONTS["body"],
+            command=self._save_output_config,
         ).pack(side="left", padx=(8, 16))
 
-        self._speaker_var = ctk.BooleanVar(
-            value=self._orch.config.get("play_on_speakers", False)
-        )
+        self._speaker_var = ctk.BooleanVar(value=self._orch.config.get("play_on_speakers", False))
         ctk.CTkCheckBox(
-            output_row, text="扬声器", variable=self._speaker_var,
-            font=FONTS["body"], command=self._save_output_config,
+            output_row,
+            text="扬声器",
+            variable=self._speaker_var,
+            font=FONTS["body"],
+            command=self._save_output_config,
         ).pack(side="left")
 
     # ------------------------------------------------------------------
@@ -314,8 +369,11 @@ class MainWindow:
         card.pack(fill="both", expand=True, padx=10, pady=4)
 
         self._textbox = ctk.CTkTextbox(
-            card, font=FONTS["body"], height=60,
-            corner_radius=8, border_width=1,
+            card,
+            font=FONTS["body"],
+            height=60,
+            corner_radius=8,
+            border_width=1,
             border_color=COLORS["border"],
             fg_color=COLORS["bg_primary"],
         )
@@ -336,44 +394,72 @@ class MainWindow:
         btn_row.pack(fill="x", padx=12, pady=(8, 12))
 
         self._send_btn = ctk.CTkButton(
-            btn_row, text=ICONS["send"] + " 发送  Ctrl+Enter",
+            btn_row,
+            text=ICONS["send"] + " 发送  Ctrl+Enter",
             font=("Microsoft YaHei UI", 12, "bold"),
-            fg_color=COLORS["accent"], hover_color=COLORS["accent_hover"],
-            height=40, corner_radius=10, command=self._on_send,
+            fg_color=COLORS["accent"],
+            hover_color=COLORS["accent_hover"],
+            height=40,
+            corner_radius=10,
+            command=self._on_send,
         )
         self._send_btn.pack(side="left", fill="x", expand=True)
 
         self._stop_btn = ctk.CTkButton(
-            btn_row, text="停止", font=FONTS["body"], width=70,
-            fg_color="transparent", hover_color=COLORS["bg_card"],
-            border_width=1, border_color=COLORS["error"],
+            btn_row,
+            text="停止",
+            font=FONTS["body"],
+            width=70,
+            fg_color="transparent",
+            hover_color=COLORS["bg_card"],
+            border_width=1,
+            border_color=COLORS["error"],
             text_color=COLORS["error"],
-            height=40, corner_radius=10, command=self._on_stop,
+            height=40,
+            corner_radius=10,
+            command=self._on_stop,
         )
         self._stop_btn.pack(side="left", padx=(8, 0))
 
         self._preview_btn = ctk.CTkButton(
-            btn_row, text="预听", font=FONTS["body"], width=70,
-            fg_color="transparent", hover_color=COLORS["bg_card"],
-            border_width=1, border_color=COLORS["accent"],
+            btn_row,
+            text="预听",
+            font=FONTS["body"],
+            width=70,
+            fg_color="transparent",
+            hover_color=COLORS["bg_card"],
+            border_width=1,
+            border_color=COLORS["accent"],
             text_color=COLORS["accent"],
-            height=40, corner_radius=10, command=self._on_preview,
+            height=40,
+            corner_radius=10,
+            command=self._on_preview,
         )
         self._preview_btn.pack(side="left", padx=(8, 0))
 
         self._floating_btn = ctk.CTkButton(
-            btn_row, text="悬浮", font=FONTS["body"], width=70,
-            fg_color="transparent", hover_color=COLORS["bg_card"],
-            border_width=1, border_color=COLORS["accent"],
+            btn_row,
+            text="悬浮",
+            font=FONTS["body"],
+            width=70,
+            fg_color="transparent",
+            hover_color=COLORS["bg_card"],
+            border_width=1,
+            border_color=COLORS["accent"],
             text_color=COLORS["accent"],
-            height=40, corner_radius=10, command=self._toggle_floating,
+            height=40,
+            corner_radius=10,
+            command=self._toggle_floating,
         )
         self._floating_btn.pack(side="left", padx=(8, 0))
 
         max_len = self._orch.config.get("max_text_length", 500)
         self._char_label = ctk.CTkLabel(
-            btn_row, text=f"0/{max_len}", font=FONTS["small"],
-            text_color=COLORS["text_dim"], width=60,
+            btn_row,
+            text=f"0/{max_len}",
+            font=FONTS["small"],
+            text_color=COLORS["text_dim"],
+            width=60,
         )
         self._char_label.pack(side="right", padx=(8, 0))
 
@@ -384,31 +470,36 @@ class MainWindow:
     def _build_phrases_card(self):
         """快捷短语卡片（标题已集成在 QuickPhrasePanel 内部）。"""
         self._phrase_panel = QuickPhrasePanel(
-            self._root, on_send=self._on_phrase_send,
+            self._root,
+            on_send=self._on_phrase_send,
             on_edit=self._on_phrase_edit,
             corner_radius=12,
             fg_color=COLORS["bg_card"],
-            border_width=1, border_color=COLORS["border_light"],
+            border_width=1,
+            border_color=COLORS["border_light"],
         )
         self._phrase_panel.pack(fill="x", padx=10, pady=4)
-        self._phrase_panel.load_phrases(
-            self._orch.config.get("quick_phrases", [])
-        )
+        self._phrase_panel.load_phrases(self._orch.config.get("quick_phrases", []))
 
     def _build_history_card(self):
         """历史记录卡片（标题已集成在 HistoryPanel 内部）。"""
         self._history = HistoryPanel(
-            self._root, on_replay=self._on_replay,
+            self._root,
+            on_replay=self._on_replay,
             show_title=True,
-            height=27, corner_radius=12,
+            height=27,
+            corner_radius=12,
             fg_color=COLORS["bg_card"],
-            border_width=1, border_color=COLORS["border_light"],
+            border_width=1,
+            border_color=COLORS["border_light"],
         )
         self._history.pack(fill="x", padx=10, pady=(4, 8))
 
     def _build_status_bar(self):
         self._status_bar = StatusBar(
-            self._root, fg_color=COLORS["bg_secondary"], corner_radius=0,
+            self._root,
+            fg_color=COLORS["bg_secondary"],
+            corner_radius=0,
         )
         self._status_bar.pack(fill="x", side="bottom")
 
@@ -485,9 +576,7 @@ class MainWindow:
         elif status == SpeakStatus.SENDING:
             self._status_bar.set_status(detail)
         elif status == SpeakStatus.PLAYING:
-            self._send_btn.configure(
-                state="normal", text=ICONS["send"] + " 发送  Ctrl+Enter"
-            )
+            self._send_btn.configure(state="normal", text=ICONS["send"] + " 发送  Ctrl+Enter")
             self._status_bar.set_status(detail, auto_clear=3000)
             self._flash_send_btn()
             h = self._orch.get_latest_history()
@@ -500,9 +589,7 @@ class MainWindow:
             self._textbox.configure(text_color=COLORS["text_dim"])
             self._send_btn.focus_set()
         elif status == SpeakStatus.ERROR:
-            self._send_btn.configure(
-                state="normal", text=ICONS["send"] + " 发送  Ctrl+Enter"
-            )
+            self._send_btn.configure(state="normal", text=ICONS["send"] + " 发送  Ctrl+Enter")
             self._status_bar.set_status(detail, is_error=True)
 
     def _flash_send_btn(self):
@@ -558,7 +645,8 @@ class MainWindow:
         if len(phrases) >= QuickPhrasePanel.MAX_PHRASES:
             return
         dialog = ctk.CTkInputDialog(
-            text="输入快捷短语:", title="添加短语",
+            text="输入快捷短语:",
+            title="添加短语",
         )
         new_phrase = dialog.get_input()
         if new_phrase and new_phrase.strip():
@@ -618,9 +706,7 @@ class MainWindow:
                 self._poll_interval = 8000
             else:
                 self._poll_interval = 3000
-                self._status_bar.set_status(
-                    "请启动 Soundpad 并开启 Remote Control", is_error=True
-                )
+                self._status_bar.set_status("请启动 Soundpad 并开启 Remote Control", is_error=True)
         except Exception:
             self._status_bar.set_connected(False)
             self._poll_interval = 3000
@@ -692,8 +778,6 @@ class MainWindow:
         geo = self._root.geometry()
         self._orch.config.set("window_geometry", geo)
         if self._floating_win and self._floating_win.winfo_exists():
-            self._orch.config.set(
-                "floating_geometry", self._floating_win.get_position()
-            )
+            self._orch.config.set("floating_geometry", self._floating_win.get_position())
             self._floating_win.destroy()
         self._orch.config.save()

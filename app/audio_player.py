@@ -30,12 +30,12 @@ class AudioPlayer:
         with self._lock:
             # 先关闭之前的
             try:
-                _mci_send(f'close {self._ALIAS}')
+                _mci_send(f"close {self._ALIAS}")
             except RuntimeError:
                 pass
             try:
                 _mci_send(f'open "{file_path}" alias {self._ALIAS}')
-                _mci_send(f'play {self._ALIAS}')
+                _mci_send(f"play {self._ALIAS}")
                 self._playing = True
             except RuntimeError as e:
                 raise RuntimeError(f"播放失败: {e}") from e
@@ -45,8 +45,8 @@ class AudioPlayer:
         with self._lock:
             if self._playing:
                 try:
-                    _mci_send(f'stop {self._ALIAS}')
-                    _mci_send(f'close {self._ALIAS}')
+                    _mci_send(f"stop {self._ALIAS}")
+                    _mci_send(f"close {self._ALIAS}")
                 except RuntimeError:
                     pass
                 self._playing = False
@@ -56,7 +56,7 @@ class AudioPlayer:
         if not self._playing:
             return False
         try:
-            status = _mci_send(f'status {self._ALIAS} mode')
+            status = _mci_send(f"status {self._ALIAS} mode")
             return "playing" in status.lower()
         except RuntimeError:
             return False

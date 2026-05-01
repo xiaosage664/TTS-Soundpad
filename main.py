@@ -45,7 +45,9 @@ def _get_cache_dir() -> Path:
     if all(ord(c) < 128 for c in str(local_cache)):
         return local_cache
     # 路径含非 ASCII，使用 ProgramData（始终纯 ASCII）
-    fallback = Path(os.environ.get("ProgramData", "C:/ProgramData")) / "TTS_Soundpad" / "audio_cache"
+    fallback = (
+        Path(os.environ.get("ProgramData", "C:/ProgramData")) / "TTS_Soundpad" / "audio_cache"
+    )
     _log.info("路径含非 ASCII 字符，缓存目录切换为: %s", fallback)
     return fallback
 
